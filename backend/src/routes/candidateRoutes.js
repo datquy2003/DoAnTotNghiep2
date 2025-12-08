@@ -132,6 +132,89 @@ router.put("/me", checkAuth, async (req, res) => {
   }
 });
 
+router.get("/me/push-top/remaining", checkAuth, async (req, res) => {
+  const candidateId = req.firebaseUser.uid;
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+    const result = await pool
+      .request()
+      .input("CandidateID", sql.NVarChar, candidateId).query(`
+        SELECT 
+          cp.LastPushedAt,
+          cp.PushTopCount,
+          (
+            SELECT TOP 1 ISNULL(us.Snapshot_PushTopDaily, sp.Limit_PushTopDaily)
+            FROM UserSubscriptions us
+            LEFT JOIN SubscriptionPlans sp ON us.PlanID = sp.PlanID
+            WHERE us.UserID = @CandidateID AND us.Status = 1 AND us.EndDate > GETDATE()
+            ORDER BY us.EndDate DESC
+          ) AS VipLimitDaily
+        FROM CandidateProfiles cp
+        WHERE cp.UserID = @CandidateID
+      `);
+
+    const profile = result.recordset[0];
+    if (!profile) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy hồ sơ để tính lượt đẩy top." });
+    }
+
+    const now = new Date();
+    const lastPush = profile.LastPushedAt
+      ? new Date(profile.LastPushedAt)
+      : null;
+    const vipLimit = profile.VipLimitDaily || 0;
+
+    if (vipLimit > 0) {
+      const nowVN = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+      const lastVN = lastPush
+        ? new Date(lastPush.getTime() + 7 * 60 * 60 * 1000)
+        : null;
+
+      let usedToday = profile.PushTopCount || 0;
+      if (
+        !lastVN ||
+        lastVN.getUTCFullYear() !== nowVN.getUTCFullYear() ||
+        lastVN.getUTCMonth() !== nowVN.getUTCMonth() ||
+        lastVN.getUTCDate() !== nowVN.getUTCDate()
+      ) {
+        usedToday = 0;
+      }
+
+      const remaining = Math.max(vipLimit - usedToday, 0);
+
+      return res.status(200).json({
+        scope: "daily",
+        limit: vipLimit,
+        usedToday,
+        remaining,
+        lastPushedAt: profile.LastPushedAt || null,
+      });
+    }
+
+    let usedThisWeek = 0;
+    if (lastPush && getMondayOfWeek(lastPush) === getMondayOfWeek(now)) {
+      usedThisWeek = 1;
+    }
+    const remaining = Math.max(1 - usedThisWeek, 0);
+
+    return res.status(200).json({
+      scope: "weekly",
+      limit: 1,
+      usedThisWeek,
+      remaining,
+      lastPushedAt: profile.LastPushedAt || null,
+    });
+  } catch (error) {
+    console.error("Lỗi GET /candidates/me/push-top/remaining:", error);
+    res
+      .status(500)
+      .json({ message: "Lỗi server khi lấy lượt đẩy top còn lại." });
+  }
+});
+
 router.post("/me/push-top", checkAuth, async (req, res) => {
   const candidateId = req.firebaseUser.uid;
 

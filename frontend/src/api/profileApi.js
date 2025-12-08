@@ -8,6 +8,10 @@ const getCandidateProfile = () => {
   return apiClient.get("/candidates/me");
 };
 
+const getPushTopRemaining = () => {
+  return apiClient.get("/candidates/me/push-top/remaining");
+};
+
 const updateCandidateProfile = (data) => {
   return apiClient.put("/candidates/me", data);
 };
@@ -27,6 +31,7 @@ const geocodeAddress = (address) => {
 export const profileApi = {
   updateBaseProfile,
   getCandidateProfile,
+  getPushTopRemaining,
   updateCandidateProfile,
   getCompanyProfile,
   updateCompanyProfile,
