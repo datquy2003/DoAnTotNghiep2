@@ -1,0 +1,11 @@
+export const DEFAULT_LIMITS = {
+  EMPLOYER: {
+    JOB_POST_DAILY: 5,
+    PUSH_TOP_INTERVAL_DAYS: 7,
+  },
+
+  CANDIDATE: {
+    CV_STORAGE: 3,
+    PUSH_TOP_INTERVAL_DAYS: 7,
+  },
+};
