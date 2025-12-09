@@ -21,6 +21,7 @@ import {
   ONE_TIME_FEATURES,
   buildFixedFeatureText,
 } from "../../constants/vipFeatures";
+import { DEFAULT_LIMITS } from "../../constants/limitConstants";
 
 const PRICE_MIN = 15000;
 const PRICE_MAX = 99999999;
@@ -167,6 +168,41 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
       return;
     }
 
+    const hasJob = formData.Limit_JobPostDaily !== "";
+    const hasPush = formData.Limit_PushTopDaily !== "";
+    const hasCv = formData.Limit_CVStorage !== "";
+
+    const limitJob = hasJob ? parseInt(formData.Limit_JobPostDaily) || 0 : 0;
+    const limitPush = hasPush ? parseInt(formData.Limit_PushTopDaily) || 0 : 0;
+    const limitCv = hasCv ? parseInt(formData.Limit_CVStorage) || 0 : 0;
+
+    if (mode === "SUBSCRIPTION") {
+      if (isEmployer && hasJob) {
+        const baseJob = DEFAULT_LIMITS.EMPLOYER.JOB_POST_DAILY || 0;
+        if (limitJob <= baseJob) {
+          toast.error(
+            `Giới hạn đăng tin mỗi ngày phải lớn hơn mặc định là ${baseJob}.`
+          );
+          return;
+        }
+      }
+
+      if (hasPush) {
+        if (limitPush <= 0) {
+          toast.error("Giới hạn đẩy top mỗi ngày phải lớn hơn 0.");
+          return;
+        }
+      }
+
+      if (!isEmployer && hasCv) {
+        const baseCv = DEFAULT_LIMITS.CANDIDATE.CV_STORAGE || 0;
+        if (limitCv <= baseCv) {
+          toast.error(`Giới hạn lưu CV phải lớn hơn mặc định là ${baseCv}.`);
+          return;
+        }
+      }
+    }
+
     const numericPrice = parseFloat(formData.Price.replace(/\./g, ""));
     if (Number.isNaN(numericPrice)) {
       toast.error("Giá không hợp lệ.");
@@ -200,10 +236,6 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
             ? 1
             : 0
           : parseInt(formData.Limit_RevealCandidatePhone) || 0;
-
-      const limitJob = parseInt(formData.Limit_JobPostDaily) || 0;
-      const limitPush = parseInt(formData.Limit_PushTopDaily) || 0;
-      const limitCv = parseInt(formData.Limit_CVStorage) || 0;
 
       const payload = {
         ...formData,
