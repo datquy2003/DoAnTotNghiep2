@@ -53,6 +53,13 @@ const VipHistory = ({ userId }) => {
     const isExpired = endDate.getTime() < nowVN.getTime();
 
     if (item.Status === 1) {
+      if (isOneTime) {
+        return (
+          <span className="px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
+            Đã mua
+          </span>
+        );
+      }
       if (!isOneTime && isExpired) {
         return (
           <span className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-600 rounded-full">
@@ -62,7 +69,7 @@ const VipHistory = ({ userId }) => {
       }
       return (
         <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-          Đang dùng
+          Sử dụng
         </span>
       );
     } else if (item.Status === 2) {
@@ -161,7 +168,7 @@ const VipHistory = ({ userId }) => {
               Giá
             </th>
             <th className="px-3 py-2 text-xs font-medium text-left text-gray-500 uppercase">
-              Quyền lợi snapshot
+              Quyền lợi
             </th>
             <th className="px-3 py-2 text-xs font-medium text-left text-gray-500 uppercase">
               Thời Gian
@@ -201,7 +208,7 @@ const VipHistory = ({ userId }) => {
                 </td>
                 <td className="px-3 py-2 text-xs text-gray-500">
                   {isOneTime ? (
-                    <span>Mua: {formatDate(item.StartDate)}</span>
+                    <span>{formatDate(item.StartDate)}</span>
                   ) : (
                     <span>
                       {formatDate(item.StartDate)} - {formatDate(item.EndDate)}
@@ -405,7 +412,7 @@ const UserDetailModal = ({ user, type, onClose }) => {
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
             <div className="space-y-4">
               <h4 className="pb-2 mb-3 text-sm font-semibold tracking-wider text-gray-400 uppercase border-b">
-                Thông tin liên hệ
+                Thông tin
               </h4>
 
               <InfoItem
