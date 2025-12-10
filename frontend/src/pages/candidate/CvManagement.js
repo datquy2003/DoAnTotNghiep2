@@ -43,6 +43,7 @@ const CvManagement = () => {
     loading: true,
     data: null,
   });
+  const [pushingTop, setPushingTop] = useState(false);
 
   const effectiveLimit = useMemo(() => {
     if (quota?.limit) return quota.limit;
@@ -218,6 +219,30 @@ const CvManagement = () => {
     return def?.CVFileUrl || null;
   }, [cvs]);
 
+  const isSearchableEnabled =
+    profilePreview.data?.IsSearchable === undefined
+      ? true
+      : profilePreview.data?.IsSearchable === true;
+
+  const handlePushTop = async () => {
+    setPushingTop(true);
+    const toastId = toast.loading("Đang đẩy top hồ sơ...");
+    try {
+      const res = await profileApi.pushTopCandidate();
+      toast.success(res.data?.message || "Đẩy top thành công!", {
+        id: toastId,
+      });
+      await loadPushTopRemaining();
+    } catch (err) {
+      console.error("Lỗi đẩy top:", err);
+      toast.error(err.response?.data?.message || "Không thể đẩy top hồ sơ.", {
+        id: toastId,
+      });
+    } finally {
+      setPushingTop(false);
+    }
+  };
+
   return (
     <div className="p-4 mx-auto max-w-7xl">
       <div className="grid items-start gap-4 md:grid-cols-3">
@@ -254,6 +279,10 @@ const CvManagement = () => {
             <h2 className="flex items-center gap-2 mb-3 text-lg font-semibold text-gray-800">
               <FiUpload /> Tải lên CV mới
             </h2>
+            <h3 className="mb-3 text-sm text-gray-500">
+              Vì các lý do bảo mật thông tin thời gian gần đây, vui lòng không
+              để các thông tin liên lạc trong CV của bạn.
+            </h3>
             <form className="space-y-4" onSubmit={handleUpload}>
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
@@ -420,14 +449,22 @@ const CvManagement = () => {
 
           <button
             type="button"
-            onClick={() =>
-              toast("Tính năng đẩy top sẽ được cập nhật ở bước tiếp theo.")
-            }
+            onClick={handlePushTop}
             className="inline-flex items-center justify-center w-full gap-2 px-4 py-2 text-white bg-orange-500 rounded-lg hover:bg-orange-600 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            disabled={pushTopInfo.loading ? true : (pushTopRemaining ?? 0) <= 0}
+            disabled={
+              pushTopInfo.loading ||
+              pushingTop ||
+              (pushTopRemaining ?? 0) <= 0 ||
+              !isSearchableEnabled
+            }
           >
-            🚀 Đẩy top hồ sơ
+            {pushingTop ? "Đang đẩy..." : "🚀 Đẩy top hồ sơ"}
           </button>
+          {!isSearchableEnabled && (
+            <p className="mt-1 text-xs text-red-600">
+              Bạn cần bật cho phép nhà tuyển dụng tìm kiếm để sử dụng Đẩy top.
+            </p>
+          )}
 
           <div className="pt-4 border-t">
             <h4 className="mb-2 text-sm font-semibold text-gray-800">

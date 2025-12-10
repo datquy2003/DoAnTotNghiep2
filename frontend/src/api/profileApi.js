@@ -32,6 +32,10 @@ const searchSearchableCandidates = (params) => {
   return apiClient.get("/candidates/searchable", { params });
 };
 
+const pushTopCandidate = () => {
+  return apiClient.post("/candidates/me/push-top");
+};
+
 const revealCandidateContact = (candidateId, jobId) => {
   const payload = { candidateId };
   if (jobId) payload.jobId = jobId;
@@ -56,4 +60,5 @@ export const profileApi = {
   searchSearchableCandidates,
   revealCandidateContact,
   createOneTimeCheckout,
+  pushTopCandidate,
 };

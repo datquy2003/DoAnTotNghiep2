@@ -3,6 +3,7 @@ import sql from "mssql";
 import { sqlConfig } from "../config/db.js";
 import { checkAuth } from "../middleware/authMiddleware.js";
 import { getMondayOfWeek } from "../config/getMondayOfWeek.js";
+import { isSameVNDay } from "../config/isSameVNDay.js";
 
 const router = express.Router();
 
@@ -372,18 +373,8 @@ router.get("/me/push-top/remaining", checkAuth, async (req, res) => {
     const vipLimit = profile.VipLimitDaily || 0;
 
     if (vipLimit > 0) {
-      const nowVN = new Date(now.getTime() + 7 * 60 * 60 * 1000);
-      const lastVN = lastPush
-        ? new Date(lastPush.getTime() + 7 * 60 * 60 * 1000)
-        : null;
-
       let usedToday = profile.PushTopCount || 0;
-      if (
-        !lastVN ||
-        lastVN.getUTCFullYear() !== nowVN.getUTCFullYear() ||
-        lastVN.getUTCMonth() !== nowVN.getUTCMonth() ||
-        lastVN.getUTCDate() !== nowVN.getUTCDate()
-      ) {
+      if (!isSameVNDay(lastPush, now)) {
         usedToday = 0;
       }
 
@@ -399,8 +390,12 @@ router.get("/me/push-top/remaining", checkAuth, async (req, res) => {
     }
 
     let usedThisWeek = 0;
-    if (lastPush && getMondayOfWeek(lastPush) === getMondayOfWeek(now)) {
-      usedThisWeek = 1;
+    if (lastPush) {
+      const lastWeekKey = getMondayOfWeek(lastPush);
+      const nowWeekKey = getMondayOfWeek(now);
+      if (lastWeekKey === nowWeekKey) {
+        usedThisWeek = 1;
+      }
     }
     const remaining = Math.max(1 - usedThisWeek, 0);
 
@@ -456,19 +451,10 @@ router.post("/me/push-top", checkAuth, async (req, res) => {
       const dailyLimit = profile.VipLimitDaily;
       let currentCount = profile.PushTopCount || 0;
 
-      if (profile.LastPushedAt) {
-        const lastPush = new Date(profile.LastPushedAt);
-        const nowVN = new Date(now.getTime() + 7 * 3600000);
-        const lastPushVN = new Date(lastPush.getTime() + 7 * 3600000);
-
-        if (
-          lastPushVN.getUTCDate() !== nowVN.getUTCDate() ||
-          lastPushVN.getUTCMonth() !== nowVN.getUTCMonth() ||
-          lastPushVN.getUTCFullYear() !== nowVN.getUTCFullYear()
-        ) {
-          currentCount = 0;
-        }
-      } else {
+      if (
+        !profile.LastPushedAt ||
+        !isSameVNDay(new Date(profile.LastPushedAt), now)
+      ) {
         currentCount = 0;
       }
 
