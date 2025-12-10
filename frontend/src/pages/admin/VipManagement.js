@@ -63,13 +63,27 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
       });
 
       if (!isSub) {
+        let detectedFeature = null;
         if (pkgToEdit.Limit_ViewApplicantCount > 0) {
-          setSelectedFeatureKey(FEATURE_KEYS.CANDIDATE_COMPETITOR_INSIGHT);
+          detectedFeature = FEATURE_KEYS.CANDIDATE_COMPETITOR_INSIGHT;
         } else if (pkgToEdit.Limit_RevealCandidatePhone > 0) {
-          setSelectedFeatureKey(FEATURE_KEYS.EMPLOYER_REVEAL_PHONE);
-        } else {
-          setSelectedFeatureKey(null);
+          detectedFeature = FEATURE_KEYS.EMPLOYER_REVEAL_PHONE;
         }
+        setSelectedFeatureKey(detectedFeature);
+
+        const matched = (ONE_TIME_FEATURES[roleId] || []).find(
+          (f) => f.key === detectedFeature
+        );
+
+        setFormData((prev) => ({
+          ...prev,
+          Features:
+            pkgToEdit.Features ||
+            matched?.suggestedFeatures ||
+            matched?.description ||
+            "",
+          PlanName: pkgToEdit.PlanName || prev.PlanName || "",
+        }));
       } else {
         setSelectedFeatureKey(null);
       }
@@ -88,6 +102,7 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
       });
       setSelectedFeatureKey(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pkgToEdit]);
 
   useEffect(() => {
@@ -102,10 +117,18 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
   }, [mode, pkgToEdit, selectedFeatureKey]);
 
   useEffect(() => {
+    if (pkgToEdit) {
+      const isSub =
+        pkgToEdit.PlanType === "SUBSCRIPTION" ||
+        (pkgToEdit.DurationInDays && pkgToEdit.DurationInDays > 0);
+      if (!isSub) return;
+    }
+
     if (mode !== "SUBSCRIPTION") return;
     const limitJob = parseInt(formData.Limit_JobPostDaily) || 0;
     const limitPush = parseInt(formData.Limit_PushTopDaily) || 0;
     const limitCv = parseInt(formData.Limit_CVStorage) || 0;
+
     const nextFeatures = buildFixedFeatureText(roleId, {
       Limit_JobPostDaily: limitJob,
       Limit_PushTopDaily: limitPush,
@@ -121,6 +144,7 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
     formData.Limit_PushTopDaily,
     formData.Limit_CVStorage,
     formData.Features,
+    pkgToEdit,
   ]);
 
   const isEmployer = roleId === 3;
@@ -488,7 +512,7 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
                 value={formData.Features}
                 onChange={handleChange}
               ></textarea>
-              {mode !== "SUBSCRIPTION" && (
+              {mode !== "SUBSCRIPTION" && !isEditingOneTime && (
                 <p className="mt-1 text-xs text-gray-500">
                   Xuống dòng để tạo gạch đầu dòng.
                 </p>
