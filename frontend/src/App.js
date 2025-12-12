@@ -26,6 +26,7 @@ import CandidateSubscription from "./pages/candidate/CandidateSubscription";
 import EmployerSubscription from "./pages/employer/EmployerSubscription";
 import PaymentResult from "./pages/PaymentResult";
 import ApplicantManagement from "./pages/employer/ApplicantManagement";
+import JobPostsManagement from "./pages/employer/JobPostsManagement";
 
 const HomeCandidate = () => <div>Trang chủ ỨNG VIÊN (Role 4)</div>;
 const HomeEmployer = () => <div>Trang chủ NHÀ TUYỂN DỤNG (Role 3)</div>;
@@ -33,7 +34,6 @@ const HomeEmployer = () => <div>Trang chủ NHÀ TUYỂN DỤNG (Role 3)</div>;
 const AppliedJobs = () => <div>Trang Việc đã ứng tuyển</div>;
 const FavoriteJobs = () => <div>Trang Việc yêu thích</div>;
 const BlockedCompanies = () => <div>Trang Công ty đã chặn</div>;
-const JobManagementEmployer = () => <div>Trang Quản lý tin tuyển dụng</div>;
 
 const Messages = () => <div>Trang Nhắn tin</div>;
 
@@ -120,7 +120,7 @@ function App() {
           element={<CandidateSubscription />}
         />
 
-        <Route path="employer/jobs" element={<JobManagementEmployer />} />
+        <Route path="employer/jobs" element={<JobPostsManagement />} />
         <Route path="employer/applicants" element={<ApplicantManagement />} />
         <Route
           path="employer/subscription"

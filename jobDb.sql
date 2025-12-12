@@ -155,6 +155,7 @@ CREATE TABLE Jobs (
     SalaryMax decimal(18, 2),
     Location nvarchar(255),
     JobType nvarchar(50),
+    Experience nvarchar(20),
 	LastPushedAt datetime,
     
     -- CẬP NHẬT: Status kiểu TINYINT
