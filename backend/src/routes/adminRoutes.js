@@ -227,10 +227,50 @@ router.delete("/users/:uid", checkAuth, async (req, res) => {
 
   try {
     const pool = await sql.connect(sqlConfig);
-    await pool
-      .request()
-      .input("FirebaseUserID", sql.NVarChar, uid)
-      .query("DELETE FROM Users WHERE FirebaseUserID = @FirebaseUserID");
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const activeSubs = await transaction
+        .request()
+        .input("UserID", sql.NVarChar, uid)
+        .query(`
+          SELECT 
+            ISNULL(us.SnapshotPlanType, sp.PlanType) AS PlanType
+          FROM UserSubscriptions us
+          LEFT JOIN SubscriptionPlans sp ON us.PlanID = sp.PlanID
+          WHERE us.UserID = @UserID
+            AND us.Status = 1
+        `);
+
+      const hasActiveRecurring = activeSubs.recordset.some((row) => {
+        const planType = (row.PlanType || "").toUpperCase();
+        return planType !== "ONE_TIME";
+      });
+
+      if (hasActiveRecurring) {
+        await transaction.rollback();
+        return res.status(400).json({
+          message:
+            "Không thể xóa tài khoản đang có gói định kỳ hoạt động. Vui lòng hủy gói trước.",
+        });
+      }
+
+      await transaction
+        .request()
+        .input("UserID", sql.NVarChar, uid)
+        .query("DELETE FROM UserSubscriptions WHERE UserID = @UserID");
+
+      await transaction
+        .request()
+        .input("FirebaseUserID", sql.NVarChar, uid)
+        .query("DELETE FROM Users WHERE FirebaseUserID = @FirebaseUserID");
+
+      await transaction.commit();
+    } catch (dbError) {
+      await transaction.rollback();
+      throw dbError;
+    }
 
     await admin.auth().deleteUser(uid);
 
