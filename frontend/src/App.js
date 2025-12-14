@@ -20,7 +20,7 @@ import JobApproval from "./pages/admin/JobApproval";
 import VipManagement from "./pages/admin/VipManagement";
 import CategoryManagement from "./pages/admin/CategoryManagement";
 import AdminAccountManagement from "./pages/admin/AdminAccountManagement";
-import TestUserCreation from "./pages/admin/TestUserCreation"; // Comment dòng này
+import TestUserCreation from "./pages/admin/TestUserCreation";
 
 import CandidateSubscription from "./pages/candidate/CandidateSubscription";
 import EmployerSubscription from "./pages/employer/EmployerSubscription";
@@ -129,7 +129,6 @@ function App() {
 
         <Route path="admin" element={<AdminLayout />}>
           <Route path="test-tools" element={<TestUserCreation />} />{" "}
-          {/* Comment dòng bên trên */}
           <Route path="users" element={<UserManagement />} />
           <Route path="jobs" element={<JobManagement />} />
           <Route path="jobs-approval" element={<JobApproval />} />

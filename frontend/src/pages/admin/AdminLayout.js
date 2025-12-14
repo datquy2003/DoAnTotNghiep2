@@ -30,7 +30,6 @@ const AdminLayout = () => {
       <aside className="hidden w-64 bg-white border-r shadow-sm md:block">
         <div className="py-4">
           <nav className="space-y-1">
-            {/* Comment từ đoạn này */}
             <div className="px-4 py-2 text-xs font-semibold tracking-wider text-yellow-600 uppercase">
               Công cụ Dev
             </div>
@@ -43,7 +42,6 @@ const AdminLayout = () => {
               <FiTool size={20} />
               <span>Tạo User Test</span>
             </NavLink>
-            {/* Tới đoạn này */}
             <div className="px-4 py-2 text-xs font-semibold tracking-wider text-gray-400 uppercase">
               Người dùng & Tin
             </div>
