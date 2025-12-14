@@ -106,7 +106,6 @@ CREATE TABLE Companies (
     Latitude decimal(9, 6),
     Longitude decimal(9, 6),
 	PushTopCount int DEFAULT 0,
-	LastPushResetAt datetime,
     
     CONSTRAINT FK_Companies_Users FOREIGN KEY (OwnerUserID) REFERENCES Users(FirebaseUserID) ON DELETE CASCADE
 );
@@ -151,6 +150,9 @@ CREATE TABLE Jobs (
     JobTitle nvarchar(255) NOT NULL,
     JobDescription ntext NOT NULL,
     Requirements ntext,
+	Benefits ntext,
+	EducationLevel NVARCHAR(100),
+    VacancyCount INT NOT NULL CONSTRAINT DF_Jobs_VacancyCount DEFAULT 1,
     SalaryMin decimal(18, 2),
     SalaryMax decimal(18, 2),
     Location nvarchar(255),
@@ -159,10 +161,9 @@ CREATE TABLE Jobs (
 	LastPushedAt datetime,
     
     -- CẬP NHẬT: Status kiểu TINYINT
-    -- 0: Chờ duyệt, 1: Đang tuyển, 2: Đã hết hạn, 3: Đã đóng
+    -- 0: Chờ duyệt, 1: Đang tuyển, 2: Đã đóng, 3: Đã hết hạn, 4: Đã bị từ chối
     Status TINYINT NOT NULL DEFAULT 0, 
     
-    IsVIP bit DEFAULT 0,
     CreatedAt datetime DEFAULT GETDATE(),
     ApprovedAt datetime,
     ExpiresAt datetime NOT NULL,
@@ -335,6 +336,46 @@ CREATE TABLE VipOneTimeUsage (
 );
 GO
 
+-- Bảng 20: JobPushTopLogs (Log mỗi lần nhà tuyển dụng bấm đẩy top bài tuyển dụng)
+CREATE TABLE JobPushTopLogs (
+    LogID int IDENTITY(1,1) PRIMARY KEY,
+    CompanyID int NOT NULL,
+    JobID int NOT NULL,
+    PushedByUserID nvarchar(128) NOT NULL,
+    PushedAt datetime NOT NULL DEFAULT GETDATE(),
+
+    CONSTRAINT FK_JobPushTopLogs_Companies FOREIGN KEY (CompanyID) REFERENCES Companies(CompanyID) ON DELETE CASCADE,
+    CONSTRAINT FK_JobPushTopLogs_Jobs FOREIGN KEY (JobID) REFERENCES Jobs(JobID) ON DELETE NO ACTION,
+    CONSTRAINT FK_JobPushTopLogs_Users FOREIGN KEY (PushedByUserID) REFERENCES Users(FirebaseUserID) ON DELETE NO ACTION
+);
+GO
+
+CREATE INDEX IX_JobPushTopLogs_Company_PushedAt ON JobPushTopLogs (CompanyID, PushedAt DESC);
+GO
+
+-- Bảng 21: JobWorkingShifts (Chọn nhiều ca làm việc trong bài tuyển dụng)
+CREATE TABLE JobWorkingShifts (
+    ShiftID INT IDENTITY(1,1) PRIMARY KEY,
+    JobID INT NOT NULL,
+
+    ShiftGroupID UNIQUEIDENTIFIER NULL,
+    RangeDayFrom TINYINT NULL,
+    RangeDayTo TINYINT NULL,
+
+    DayOfWeek TINYINT NOT NULL,
+
+    TimeFrom TIME NOT NULL,
+    TimeTo TIME NOT NULL,
+
+    CreatedAt DATETIME DEFAULT GETDATE(),
+
+    CONSTRAINT FK_JobWorkingShifts_Jobs FOREIGN KEY (JobID) REFERENCES Jobs(JobID) ON DELETE CASCADE,
+    CONSTRAINT CK_JobWorkingShifts_Day CHECK (DayOfWeek BETWEEN 1 AND 7),
+    CONSTRAINT CK_JobWorkingShifts_RangeFrom CHECK (RangeDayFrom IS NULL OR RangeDayFrom BETWEEN 1 AND 7),
+    CONSTRAINT CK_JobWorkingShifts_RangeTo CHECK (RangeDayTo IS NULL OR RangeDayTo BETWEEN 1 AND 7)
+);
+GO
+
 INSERT INTO Roles (RoleName) VALUES 
 ('Admin'),        -- 1
 ('SuperAdmin'),   -- 2
@@ -348,14 +389,9 @@ BEGIN
     SET NOCOUNT ON;
 
     UPDATE Jobs
-    SET Status = 2
+    SET Status = 3
     WHERE ExpiresAt <= GETDATE()
       AND Status IN (0,1);
-
-    UPDATE Jobs
-    SET IsVIP = 0
-    WHERE ExpiresAt <= GETDATE()
-      AND IsVIP = 1;
 
     UPDATE UserSubscriptions
     SET Status = 2

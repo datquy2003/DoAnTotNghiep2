@@ -1,60 +1,72 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { FiPlus, FiEye, FiEdit2, FiTrash, FiRefreshCw } from "react-icons/fi";
+import React, { useEffect, useState } from "react";
+import {
+  FiPlus,
+  FiInfo,
+  FiEdit2,
+  FiTrash2,
+  FiRefreshCw,
+  FiArrowUpCircle,
+  FiUsers,
+  FiXCircle,
+  FiRotateCcw,
+} from "react-icons/fi";
 import toast from "react-hot-toast";
 import { jobApi } from "../../api/jobApi";
 import { categoryApi } from "../../api/categoryApi";
-import { formatCurrency } from "../../utils/formatCurrency";
-import { formatDate } from "../../utils/formatDate";
-import { JOB_TYPES } from "../../constants/jobTypes";
-import { EXPERIENCE_AMOUNT } from "../../constants/experienceAmount";
+import { renderSalary } from "../../utils/renderSalary";
 import { STATUS_CONFIG } from "../../constants/statusConfig";
+import { GUIDE_ITEMS } from "../../constants/guideItemsJobPost";
+import { formatDate } from "../../utils/formatDate";
+import JobPostAddEditModal from "./components/JobPostAddEditModal";
+import JobPostDetailModal from "./components/JobPostDetailModal";
+import ConfirmationModal from "../../components/modals/ConfirmationModal";
 
 const JobPostsManagement = () => {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [pushTopDashboard, setPushTopDashboard] = useState(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [addModalResetKey, setAddModalResetKey] = useState(0);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editModalResetKey, setEditModalResetKey] = useState(0);
+  const [editJob, setEditJob] = useState(null);
   const [detailJob, setDetailJob] = useState(null);
   const [specMap, setSpecMap] = useState({});
   const [categories, setCategories] = useState([]);
   const [specializations, setSpecializations] = useState([]);
-  const [categoryOpen, setCategoryOpen] = useState(false);
-  const [specOpen, setSpecOpen] = useState(false);
-  const [jobTypeOpen, setJobTypeOpen] = useState(false);
-  const [experienceOpen, setExperienceOpen] = useState(false);
-  const [categorySearch, setCategorySearch] = useState("");
-  const [specSearch, setSpecSearch] = useState("");
-  const [jobTypeSearch, setJobTypeSearch] = useState("");
-  const [experienceSearch, setExperienceSearch] = useState("");
-  const categoryRef = useRef(null);
-  const specRef = useRef(null);
-  const jobTypeRef = useRef(null);
-  const experienceRef = useRef(null);
-  const initialJobState = {
-    JobTitle: "",
-    CategoryID: "",
-    SpecializationID: "",
-    Location: "",
-    JobType: "",
-    SalaryMin: "",
-    SalaryMax: "",
-    Experience: "",
-    JobDescription: "",
-    Requirements: "",
-    ExpiresAt: "",
-  };
-  const [newJob, setNewJob] = useState(initialJobState);
+  const [pushingId, setPushingId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+    isDanger: false,
+    confirmText: "Xác nhận",
+  });
 
-  const resetFormState = () => {
-    setNewJob(initialJobState);
-    setCategorySearch("");
-    setSpecSearch("");
-    setJobTypeSearch("");
-    setExperienceSearch("");
-    setCategoryOpen(false);
-    setSpecOpen(false);
-    setJobTypeOpen(false);
-    setExperienceOpen(false);
+  const resetFormState = () => setAddModalResetKey((k) => k + 1);
+  const resetEditFormState = () => setEditModalResetKey((k) => k + 1);
+
+  const openEditModal = (job) => {
+    setEditJob(job || null);
+    resetEditFormState();
+    setEditModalOpen(true);
+  };
+
+  const loadPushTopDashboard = async () => {
+    setDashboardLoading(true);
+    try {
+      const res = await jobApi.getPushTopDashboard();
+      setPushTopDashboard(res?.data || res || null);
+    } catch (error) {
+      console.error("Lỗi lấy push-top dashboard:", error);
+      setPushTopDashboard(null);
+    } finally {
+      setDashboardLoading(false);
+    }
   };
 
   const loadJobs = async () => {
@@ -66,7 +78,12 @@ const JobPostsManagement = () => {
         : Array.isArray(res)
         ? res
         : [];
-      setJobs(list);
+      const sorted = [...list].sort((a, b) => {
+        const dateA = a.CreatedAt ? new Date(a.CreatedAt) : new Date(0);
+        const dateB = b.CreatedAt ? new Date(b.CreatedAt) : new Date(0);
+        return dateB - dateA;
+      });
+      setJobs(sorted);
     } catch (error) {
       console.error("Lỗi lấy danh sách bài đăng:", error);
       const message =
@@ -127,654 +144,161 @@ const JobPostsManagement = () => {
 
   useEffect(() => {
     loadJobs();
+    loadPushTopDashboard();
     loadSpecializations();
     loadCategories();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (categoryRef.current && !categoryRef.current.contains(e.target)) {
-        setCategoryOpen(false);
-      }
-      if (specRef.current && !specRef.current.contains(e.target)) {
-        setSpecOpen(false);
-      }
-      if (jobTypeRef.current && !jobTypeRef.current.contains(e.target)) {
-        setJobTypeOpen(false);
-      }
-      if (experienceRef.current && !experienceRef.current.contains(e.target)) {
-        setExperienceOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const filteredCategories = useMemo(() => {
-    const keyword = categorySearch.trim().toLowerCase();
-    if (!keyword) return categories;
-    return categories.filter((c) =>
-      (c.CategoryName || "").toLowerCase().includes(keyword)
-    );
-  }, [categories, categorySearch]);
-
-  const filteredSpecsGlobal = useMemo(() => {
-    const keyword = specSearch.trim().toLowerCase();
-    if (!keyword) return specializations;
-    return specializations.filter((s) =>
-      (s.SpecializationName || "").toLowerCase().includes(keyword)
-    );
-  }, [specializations, specSearch]);
-
-  const jobTypeList = useMemo(
-    () =>
-      Object.entries(JOB_TYPES)
-        .filter(([key]) => key !== "ALL")
-        .map(([key, value]) => ({ key, value }))
-        .sort((a, b) =>
-          (a.value || "").localeCompare(b.value || "", "vi", {
-            sensitivity: "base",
-          })
-        ),
-    []
-  );
-
-  const filteredJobTypes = useMemo(() => {
-    const keyword = jobTypeSearch.trim().toLowerCase();
-    if (!keyword) return jobTypeList;
-    return jobTypeList.filter((t) =>
-      (t.value || "").toLowerCase().includes(keyword)
-    );
-  }, [jobTypeList, jobTypeSearch]);
-
-  const experienceList = useMemo(
-    () =>
-      Object.entries(EXPERIENCE_AMOUNT)
-        .filter(([key]) => key !== "ALL")
-        .map(([key, value]) => ({ key, value }))
-        .sort((a, b) =>
-          (a.value || "").localeCompare(b.value || "", "vi", {
-            sensitivity: "base",
-          })
-        ),
-    []
-  );
-
-  const filteredExperiences = useMemo(() => {
-    const keyword = experienceSearch.trim().toLowerCase();
-    if (!keyword) return experienceList;
-    return experienceList.filter((e) =>
-      (e.value || "").toLowerCase().includes(keyword)
-    );
-  }, [experienceList, experienceSearch]);
-
-  const renderSalary = (min, max) => {
-    if (min == null || max == null) return "Thỏa thuận";
-    return `${formatCurrency(min)} - ${formatCurrency(max)}`;
-  };
-
   const renderExpiresAt = (value) => {
-    const formatted = formatDate(value);
-    if (!formatted) return "—";
-    const [datePart] = formatted.split(",");
-    return datePart || formatted;
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return date.toLocaleDateString("vi-VN", { timeZone: "UTC" });
   };
 
-  const detailRows = useMemo(() => {
-    if (!detailJob) return [];
-    return [
-      { label: "Tiêu đề", value: detailJob.JobTitle },
-      {
-        label: "Mức lương",
-        value: renderSalary(detailJob.SalaryMin, detailJob.SalaryMax),
-      },
-      { label: "Kinh nghiệm", value: detailJob.Experience || "—" },
-      {
-        label: "Chuyên môn",
-        value: specMap[detailJob.SpecializationID] || "—",
-      },
-      { label: "Ngày hết hạn", value: renderExpiresAt(detailJob.ExpiresAt) },
-      {
-        label: "Trạng thái",
-        value:
-          STATUS_CONFIG[detailJob.Status]?.label ||
-          `Trạng thái ${detailJob.Status}`,
-      },
-    ];
-  }, [detailJob, specMap]);
+  const renderCreatedAt = (value) => {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    return date.toLocaleDateString("vi-VN", { timeZone: "UTC" });
+  };
 
-  const renderAddModal = () => {
-    if (!addModalOpen) return null;
+  const handlePushTop = async (jobId) => {
+    if (!jobId) return;
 
-    const handleInputChange = (key, value) => {
-      setNewJob((prev) => ({ ...prev, [key]: value }));
-    };
-
-    const handleClose = () => {
-      resetFormState();
-      setAddModalOpen(false);
-    };
-
-    const handleSubmit = async (e) => {
-      e.preventDefault();
-      if (!newJob.JobTitle || !newJob.JobDescription || !newJob.ExpiresAt) {
-        toast.error("Vui lòng nhập Tiêu đề, Mô tả và Ngày hết hạn.");
+    if (pushTopDashboard) {
+      if (
+        pushTopDashboard.isVip &&
+        typeof pushTopDashboard.remainingToday === "number" &&
+        pushTopDashboard.remainingToday <= 0
+      ) {
+        toast.error("Bạn đã hết lượt đẩy top hôm nay.");
         return;
       }
-
-      const payload = {
-        ...newJob,
-        CategoryID: newJob.CategoryID ? Number(newJob.CategoryID) : null,
-        SpecializationID: newJob.SpecializationID
-          ? Number(newJob.SpecializationID)
-          : null,
-        SalaryMin: newJob.SalaryMin ? Number(newJob.SalaryMin) : null,
-        SalaryMax: newJob.SalaryMax ? Number(newJob.SalaryMax) : null,
-        ExpiresAt: newJob.ExpiresAt,
-      };
-
-      try {
-        const res = await jobApi.createJob(payload);
-        toast.success("Tạo bài đăng thành công.");
-        handleClose();
-        setJobs((prev) => [res.data || res, ...prev]);
-      } catch (error) {
-        console.error("Lỗi tạo bài đăng:", error);
-        const message =
-          error.response?.data?.message ||
-          "Không thể tạo bài đăng. Vui lòng thử lại.";
-        toast.error(message);
+      if (
+        !pushTopDashboard.isVip &&
+        typeof pushTopDashboard.remainingThisWeek === "number" &&
+        pushTopDashboard.remainingThisWeek <= 0
+      ) {
+        toast.error("Bạn đã hết lượt đẩy top trong tuần này.");
+        return;
       }
-    };
+    }
 
-    const formatSalaryDisplay = (value) => {
-      if (!value) return "";
-      const num = Number(value);
-      if (Number.isNaN(num)) return "";
-      return new Intl.NumberFormat("vi-VN", {
-        maximumFractionDigits: 0,
-      }).format(num);
-    };
-
-    const handleSalaryChange = (key, raw) => {
-      const digitsOnly = raw.replace(/[^\d]/g, "");
-      handleInputChange(key, digitsOnly);
-    };
-
-    const filteredSpecs = [...filteredSpecsGlobal]
-      .filter((s) =>
-        newJob.CategoryID ? s.CategoryID === Number(newJob.CategoryID) : true
-      )
-      .sort((a, b) =>
-        ((a.SpecializationName || "") + "")
-          .trim()
-          .localeCompare(((b.SpecializationName || "") + "").trim(), "vi", {
-            sensitivity: "base",
-          })
-      );
-
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/30 backdrop-blur-sm">
-        <div className="w-full max-w-2xl bg-white border border-gray-100 shadow-2xl rounded-xl">
-          <div className="flex items-center justify-between px-6 py-4 border-b">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                Thêm mới bài đăng
-              </h3>
-            </div>
-            <button
-              className="text-gray-500 hover:text-gray-700"
-              onClick={handleClose}
-            >
-              ✕
-            </button>
-          </div>
-          <form onSubmit={handleSubmit}>
-            <div className="px-6 py-6 space-y-4 text-gray-700 max-h-[70vh] overflow-y-auto">
-              <div className="grid grid-cols-1 gap-4">
-                <label className="space-y-1 text-sm">
-                  <span className="font-semibold text-gray-800">Tiêu đề</span>
-                  <input
-                    type="text"
-                    required
-                    value={newJob.JobTitle}
-                    onChange={(e) =>
-                      handleInputChange("JobTitle", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="space-y-1 text-sm" ref={categoryRef}>
-                  <span className="font-semibold text-gray-800">Danh mục</span>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="-- Chọn danh mục --"
-                      value={
-                        categorySearch !== ""
-                          ? categorySearch
-                          : categories.find(
-                              (c) =>
-                                String(c.CategoryID) ===
-                                String(newJob.CategoryID)
-                            )?.CategoryName || ""
-                      }
-                      onFocus={() => setCategoryOpen(true)}
-                      onChange={(e) => {
-                        setCategorySearch(e.target.value);
-                        setCategoryOpen(true);
-                      }}
-                      className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    {(categorySearch !== "" || newJob.CategoryID) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleInputChange("CategoryID", "");
-                          handleInputChange("SpecializationID", "");
-                          setCategorySearch("");
-                          setSpecSearch("");
-                          setSpecOpen(false);
-                          setCategoryOpen(true);
-                        }}
-                        className="absolute inset-y-0 px-2 text-gray-400 right-2 hover:text-gray-600"
-                        aria-label="Xóa danh mục"
-                      >
-                        ×
-                      </button>
-                    )}
-                    {categoryOpen && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-                        <div className="overflow-y-auto max-h-56">
-                          {filteredCategories.map((c) => (
-                            <button
-                              type="button"
-                              key={c.CategoryID}
-                              onClick={() => {
-                                handleInputChange("CategoryID", c.CategoryID);
-                                handleInputChange("SpecializationID", "");
-                                setCategoryOpen(false);
-                                setCategorySearch(c.CategoryName || "");
-                                setSpecSearch("");
-                                setSpecOpen(false);
-                              }}
-                              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                                String(newJob.CategoryID) ===
-                                String(c.CategoryID)
-                                  ? "bg-blue-50 text-blue-700"
-                                  : ""
-                              }`}
-                            >
-                              {c.CategoryName}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </label>
-
-                <label className="space-y-1 text-sm" ref={specRef}>
-                  <span className="font-semibold text-gray-800">
-                    Chuyên môn
-                  </span>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder={
-                        newJob.CategoryID
-                          ? "-- Chọn chuyên môn --"
-                          : "Chọn danh mục trước"
-                      }
-                      value={
-                        specSearch !== ""
-                          ? specSearch
-                          : filteredSpecs.find(
-                              (s) =>
-                                String(s.SpecializationID) ===
-                                String(newJob.SpecializationID)
-                            )?.SpecializationName || ""
-                      }
-                      onFocus={() => newJob.CategoryID && setSpecOpen(true)}
-                      onChange={(e) => {
-                        if (!newJob.CategoryID) return;
-                        setSpecSearch(e.target.value);
-                        setSpecOpen(true);
-                      }}
-                      disabled={!newJob.CategoryID}
-                      className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
-                    />
-                    {(specSearch !== "" || newJob.SpecializationID) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleInputChange("SpecializationID", "");
-                          setSpecSearch("");
-                          setSpecOpen(!!newJob.CategoryID);
-                        }}
-                        className="absolute inset-y-0 px-2 text-gray-400 right-2 hover:text-gray-600"
-                        aria-label="Xóa chuyên môn"
-                      >
-                        ×
-                      </button>
-                    )}
-                    {specOpen && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-                        <div className="overflow-y-auto max-h-56">
-                          {filteredSpecs.map((s) => (
-                            <button
-                              type="button"
-                              key={s.SpecializationID}
-                              onClick={() => {
-                                handleInputChange(
-                                  "SpecializationID",
-                                  s.SpecializationID
-                                );
-                                setSpecOpen(false);
-                                setSpecSearch(s.SpecializationName || "");
-                              }}
-                              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                                String(newJob.SpecializationID) ===
-                                String(s.SpecializationID)
-                                  ? "bg-blue-50 text-blue-700"
-                                  : ""
-                              }`}
-                            >
-                              {s.SpecializationName}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="space-y-1 text-sm">
-                  <span className="font-semibold text-gray-800">
-                    Địa điểm làm việc
-                  </span>
-                  <input
-                    type="text"
-                    value={newJob.Location}
-                    onChange={(e) =>
-                      handleInputChange("Location", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </label>
-
-                <label className="space-y-1 text-sm">
-                  <span className="font-semibold text-gray-800">
-                    Vị trí công việc
-                  </span>
-                  <div className="relative" ref={jobTypeRef}>
-                    <input
-                      type="text"
-                      placeholder="-- Chọn vị trí công việc --"
-                      value={
-                        jobTypeSearch !== ""
-                          ? jobTypeSearch
-                          : jobTypeList.find((t) => t.value === newJob.JobType)
-                              ?.value || ""
-                      }
-                      onFocus={() => setJobTypeOpen(true)}
-                      onChange={(e) => {
-                        setJobTypeSearch(e.target.value);
-                        setJobTypeOpen(true);
-                      }}
-                      className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    {(jobTypeSearch !== "" || newJob.JobType) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleInputChange("JobType", "");
-                          setJobTypeSearch("");
-                          setJobTypeOpen(true);
-                        }}
-                        className="absolute inset-y-0 px-2 text-gray-400 right-2 hover:text-gray-600"
-                        aria-label="Xóa vị trí công việc"
-                      >
-                        ×
-                      </button>
-                    )}
-                    {jobTypeOpen && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-                        <div className="overflow-y-auto max-h-56">
-                          {filteredJobTypes.map((t) => (
-                            <button
-                              type="button"
-                              key={t.key}
-                              onClick={() => {
-                                handleInputChange("JobType", t.value);
-                                setJobTypeOpen(false);
-                                setJobTypeSearch(t.value || "");
-                              }}
-                              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                                newJob.JobType === t.value
-                                  ? "bg-blue-50 text-blue-700"
-                                  : ""
-                              }`}
-                            >
-                              {t.value}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="space-y-1 text-sm">
-                  <span className="font-semibold text-gray-800">
-                    Lương tối thiểu
-                  </span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={formatSalaryDisplay(newJob.SalaryMin)}
-                    onChange={(e) =>
-                      handleSalaryChange("SalaryMin", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </label>
-
-                <label className="space-y-1 text-sm">
-                  <span className="font-semibold text-gray-800">
-                    Lương tối đa
-                  </span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={formatSalaryDisplay(newJob.SalaryMax)}
-                    onChange={(e) =>
-                      handleSalaryChange("SalaryMax", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <label className="space-y-1 text-sm" ref={experienceRef}>
-                  <span className="font-semibold text-gray-800">
-                    Kinh nghiệm
-                  </span>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="-- Chọn kinh nghiệm --"
-                      value={
-                        experienceSearch !== ""
-                          ? experienceSearch
-                          : experienceList.find(
-                              (e) => e.value === newJob.Experience
-                            )?.value || ""
-                      }
-                      onFocus={() => setExperienceOpen(true)}
-                      onChange={(e) => {
-                        setExperienceSearch(e.target.value);
-                        setExperienceOpen(true);
-                      }}
-                      className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    {(experienceSearch !== "" || newJob.Experience) && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          handleInputChange("Experience", "");
-                          setExperienceSearch("");
-                          setExperienceOpen(true);
-                        }}
-                        className="absolute inset-y-0 px-2 text-gray-400 right-2 hover:text-gray-600"
-                        aria-label="Xóa kinh nghiệm"
-                      >
-                        ×
-                      </button>
-                    )}
-                    {experienceOpen && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-                        <div className="overflow-y-auto max-h-56">
-                          {filteredExperiences.map((e) => (
-                            <button
-                              type="button"
-                              key={e.key}
-                              onClick={() => {
-                                handleInputChange("Experience", e.value);
-                                setExperienceOpen(false);
-                                setExperienceSearch(e.value || "");
-                              }}
-                              className={`w-full text-left px-3 py-2 text-sm hover:bg-gray-50 ${
-                                newJob.Experience === e.value
-                                  ? "bg-blue-50 text-blue-700"
-                                  : ""
-                              }`}
-                            >
-                              {e.value}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </label>
-
-                <label className="space-y-1 text-sm">
-                  <span className="font-semibold text-gray-800">
-                    Ngày hết hạn
-                  </span>
-                  <input
-                    type="date"
-                    value={newJob.ExpiresAt}
-                    onChange={(e) =>
-                      handleInputChange("ExpiresAt", e.target.value)
-                    }
-                    min={new Date().toISOString().split("T")[0]}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
-                <label className="space-y-1 text-sm">
-                  <span className="font-semibold text-gray-800">Mô tả</span>
-                  <textarea
-                    rows={3}
-                    value={newJob.JobDescription}
-                    onChange={(e) =>
-                      handleInputChange("JobDescription", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </label>
-              </div>
-
-              <div className="grid grid-cols-1 gap-4">
-                <label className="space-y-1 text-sm">
-                  <span className="font-semibold text-gray-800">Yêu cầu</span>
-                  <textarea
-                    rows={3}
-                    value={newJob.Requirements}
-                    onChange={(e) =>
-                      handleInputChange("Requirements", e.target.value)
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </label>
-              </div>
-            </div>
-            <div className="flex justify-end gap-3 px-6 py-4 border-t">
-              <button
-                type="button"
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-                onClick={handleClose}
-              >
-                Hủy
-              </button>
-              <button
-                type="submit"
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-              >
-                Lưu bài đăng
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    );
+    setPushingId(jobId);
+    try {
+      const res = await jobApi.pushTop(jobId);
+      const message = res?.data?.message || "Đẩy top thành công.";
+      toast.success(message);
+      await loadJobs();
+      await loadPushTopDashboard();
+    } catch (error) {
+      console.error("Lỗi đẩy top:", error);
+      const message =
+        error.response?.data?.message || "Không thể đẩy top. Vui lòng thử lại.";
+      toast.error(message);
+    } finally {
+      setPushingId(null);
+    }
   };
 
-  const renderDetailModal = () => {
-    if (!detailJob) return null;
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/30 backdrop-blur-sm">
-        <div className="w-full max-w-2xl bg-white border border-gray-100 shadow-2xl rounded-xl">
-          <div className="flex items-center justify-between px-6 py-4 border-b">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">
-                Chi tiết bài đăng
-              </h3>
-              <p className="text-sm text-gray-500">
-                Nội dung đầy đủ sẽ được bổ sung trong bước tiếp theo.
-              </p>
-            </div>
-            <button
-              className="text-gray-500 hover:text-gray-700"
-              onClick={() => setDetailJob(null)}
-            >
-              ✕
-            </button>
-          </div>
-          <div className="px-6 py-6 space-y-4">
-            {detailRows.map((row) => (
-              <div
-                key={row.label}
-                className="flex justify-between gap-4 text-sm text-gray-800"
-              >
-                <span className="font-semibold text-gray-600">{row.label}</span>
-                <span className="text-right">{row.value || "—"}</span>
-              </div>
-            ))}
-          </div>
-          <div className="flex justify-end px-6 py-4 border-t">
-            <button
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-              onClick={() => setDetailJob(null)}
-            >
-              Đóng
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  const handleCloseJob = async (jobId) => {
+    if (!jobId) return;
+    try {
+      const res = await jobApi.closeJob(jobId);
+      toast.success(res?.data?.message || "Đóng bài tuyển dụng thành công.");
+      await loadJobs();
+    } catch (error) {
+      console.error("Lỗi đóng bài:", error);
+      const message =
+        error.response?.data?.message ||
+        "Không thể đóng bài. Vui lòng thử lại.";
+      toast.error(message);
+    }
+  };
+
+  const handleReopenJob = async (jobId) => {
+    if (!jobId) return;
+    try {
+      const res = await jobApi.reopenJob(jobId);
+      toast.success(res?.data?.message || "Mở lại bài tuyển dụng thành công.");
+      await loadJobs();
+    } catch (error) {
+      console.error("Lỗi mở lại bài:", error);
+      const message =
+        error.response?.data?.message ||
+        "Không thể mở lại bài. Vui lòng thử lại.";
+      toast.error(message);
+    }
+  };
+
+  const confirmCloseJob = (job) => {
+    const jobId = job?.JobID;
+    if (!jobId) return;
+    if (Number(job?.Status) !== 1) return;
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Đóng bài tuyển dụng",
+      message: `Bạn có chắc chắn muốn đóng bài "${
+        job?.JobTitle || "—"
+      }" không?`,
+      isDanger: true,
+      confirmText: "Đóng bài",
+      onConfirm: () => handleCloseJob(jobId),
+    });
+  };
+
+  const confirmReopenJob = (job) => {
+    const jobId = job?.JobID;
+    if (!jobId) return;
+    if (Number(job?.Status) !== 2) return;
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Mở lại bài tuyển dụng",
+      message: `Bạn có chắc chắn muốn mở lại bài "${
+        job?.JobTitle || "—"
+      }" để tiếp tục tuyển dụng không?`,
+      isDanger: false,
+      confirmText: "Mở lại",
+      onConfirm: () => handleReopenJob(jobId),
+    });
+  };
+
+  const handleDeleteJob = async (jobId) => {
+    if (!jobId) return;
+    setDeletingId(jobId);
+    try {
+      const res = await jobApi.deleteJob(jobId);
+      toast.success(res?.data?.message || "Xóa bài đăng thành công.");
+      await loadJobs();
+      loadPushTopDashboard();
+    } catch (error) {
+      console.error("Lỗi xóa bài:", error);
+      const message =
+        error.response?.data?.message || "Không thể xóa bài. Vui lòng thử lại.";
+      toast.error(message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const confirmDeleteJob = (job) => {
+    const jobId = job?.JobID;
+    if (!jobId) return;
+    if (Number(job?.Status) === 1) return;
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Xóa bài đăng",
+      message: `Bạn có chắc chắn muốn XÓA bài đăng "${
+        job?.JobTitle || "—"
+      }" không? Hành động này không thể hoàn tác.`,
+      isDanger: true,
+      confirmText: "Xóa",
+      onConfirm: () => handleDeleteJob(jobId),
+    });
   };
 
   if (loading) {
@@ -789,147 +313,455 @@ const JobPostsManagement = () => {
   }
 
   return (
-    <div className="px-4 py-8 mx-auto max-w-7xl">
-      <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Quản lý tin tuyển dụng
-          </h1>
-          <p className="text-gray-600">
-            Danh sách các bài viết bạn đã đăng. Bạn có thể xem chi tiết, sửa
-            hoặc xóa.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={loadJobs}
-            disabled={refreshing}
-            className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-60"
-          >
-            <FiRefreshCw
-              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-            />
-            <span>Làm mới</span>
-          </button>
-          <button
-            onClick={() => {
-              resetFormState();
-              setAddModalOpen(true);
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg shadow-sm hover:bg-blue-700"
-          >
-            <FiPlus className="w-4 h-4" />
-            <span>Thêm mới</span>
-          </button>
-        </div>
-      </div>
+    <div className="w-full px-4 py-8 lg:px-0">
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)_320px] gap-4 xl:gap-6">
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <div className="p-4 bg-white border border-gray-100 shadow-sm rounded-xl">
+            <div className="text-sm font-semibold text-gray-900">
+              Một số quy tắc với các nút bấm
+            </div>
+            <ul className="pl-5 mt-3 space-y-2 text-sm text-gray-700 list-disc">
+              {GUIDE_ITEMS.map((item, idx) => (
+                <li key={idx}>{item}</li>
+              ))}
+            </ul>
+          </div>
+        </aside>
 
-      <div className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-xl">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
-                  Tiêu đề
-                </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
-                  Mức lương
-                </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
-                  Kinh nghiệm
-                </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
-                  Chuyên môn
-                </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
-                  Ngày hết hạn
-                </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
-                  Trạng thái
-                </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
-                  Hành động
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {jobs.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    className="px-4 py-10 text-sm text-center text-gray-500"
-                  >
-                    Chưa có bài đăng nào.
-                  </td>
-                </tr>
-              ) : (
-                jobs.map((job) => (
-                  <tr key={job.JobID} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-sm font-semibold text-gray-900">
-                      {job.JobTitle}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      {renderSalary(job.SalaryMin, job.SalaryMax)}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      {job.Experience || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      {specMap[job.SpecializationID] || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      {renderExpiresAt(job.ExpiresAt)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${
-                          STATUS_CONFIG[job.Status]?.className ||
-                          "bg-gray-100 text-gray-700"
-                        }`}
-                      >
-                        {STATUS_CONFIG[job.Status]?.label ||
-                          `Trạng thái ${job.Status}`}
+        <main className="lg:px-4">
+          <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Quản lý tin tuyển dụng
+              </h1>
+              {typeof pushTopDashboard?.jobPostDailyLimit === "number" ? (
+                <div className="mt-1 text-sm text-gray-700">
+                  Đăng bài hôm nay:{" "}
+                  <span className="font-semibold text-gray-900">
+                    {pushTopDashboard.jobPostUsedToday ?? 0}/
+                    {pushTopDashboard.jobPostDailyLimit}
+                  </span>
+                  {typeof pushTopDashboard?.jobPostRemainingToday ===
+                  "number" ? (
+                    <>
+                      {" "}
+                      (Còn{" "}
+                      <span className="font-semibold text-blue-700">
+                        {pushTopDashboard.jobPostRemainingToday}
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-gray-700">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setDetailJob(job)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
-                        >
-                          <FiEye className="w-4 h-4" />
-                          <span>Chi tiết</span>
-                        </button>
-                        <button
-                          onClick={() =>
-                            toast("Tính năng chỉnh sửa sẽ được bổ sung sau.")
-                          }
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50"
-                        >
-                          <FiEdit2 className="w-4 h-4" />
-                          <span>Sửa</span>
-                        </button>
-                        <button
-                          onClick={() =>
-                            toast("Tính năng xóa sẽ được bổ sung sau.")
-                          }
-                          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-gray-200 text-red-600 hover:bg-red-50"
-                        >
-                          <FiTrash className="w-4 h-4" />
-                          <span>Xóa</span>
-                        </button>
-                      </div>
-                    </td>
+                      )
+                    </>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+            {(() => {
+              const isPostQuotaExceeded =
+                typeof pushTopDashboard?.jobPostRemainingToday === "number" &&
+                pushTopDashboard.jobPostRemainingToday <= 0;
+
+              return (
+                <div className="flex flex-col items-end gap-1">
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={async () => {
+                        await loadJobs();
+                        loadPushTopDashboard();
+                      }}
+                      disabled={refreshing}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-60"
+                    >
+                      <FiRefreshCw
+                        className={`h-4 w-4 ${
+                          refreshing ? "animate-spin" : ""
+                        }`}
+                      />
+                      <span>Làm mới</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        resetFormState();
+                        setAddModalOpen(true);
+                      }}
+                      disabled={isPostQuotaExceeded}
+                      className="inline-flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg shadow-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      <FiPlus className="w-4 h-4" />
+                      <span>Thêm mới</span>
+                    </button>
+                  </div>
+                  {isPostQuotaExceeded ? (
+                    <div className="text-xs text-red-600">
+                      Đã hết lượt đăng bài hôm nay.
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })()}
+          </div>
+
+          <div className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-xl">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                      Tiêu đề
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                      Mức lương
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                      Kinh nghiệm
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                      Chuyên môn
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                      Ngày tạo
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                      Ngày hết hạn
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                      Trạng thái
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                      Hành động
+                    </th>
                   </tr>
-                ))
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {jobs.length === 0 ? (
+                    <tr>
+                      <td
+                        colSpan={8}
+                        className="px-4 py-10 text-sm text-center text-gray-500"
+                      >
+                        Chưa có bài đăng nào.
+                      </td>
+                    </tr>
+                  ) : (
+                    jobs.map((job) => (
+                      <tr key={job.JobID} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">
+                          {job.JobTitle}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {renderSalary(job.SalaryMin, job.SalaryMax)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {job.Experience || "—"}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {specMap[job.SpecializationID] ? (
+                            <span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-100 inline-block max-w-[320px] whitespace-normal text-left">
+                              {specMap[job.SpecializationID]}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {renderCreatedAt(job.CreatedAt)}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          {renderExpiresAt(job.ExpiresAt)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${
+                              STATUS_CONFIG[job.Status]?.className ||
+                              "bg-gray-100 text-gray-700"
+                            }`}
+                          >
+                            {STATUS_CONFIG[job.Status]?.label ||
+                              `Trạng thái ${job.Status}`}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700">
+                          <div className="flex items-center gap-2">
+                            <button
+                              title="Chi tiết"
+                              onClick={() => setDetailJob(job)}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              <FiInfo className="w-4 h-4" />
+                            </button>
+                            <button
+                              title="Sửa"
+                              onClick={() => openEditModal(job)}
+                              disabled={Number(job.Status) !== 0}
+                              className={`text-blue-600 hover:text-blue-900 ${
+                                Number(job.Status) !== 0
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : ""
+                              }`}
+                            >
+                              <FiEdit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              title="Đẩy top"
+                              onClick={() => handlePushTop(job.JobID)}
+                              disabled={
+                                pushingId === job.JobID ||
+                                job.Status !== 1 ||
+                                dashboardLoading ||
+                                (pushTopDashboard?.isVip &&
+                                  Number(pushTopDashboard?.remainingToday) <=
+                                    0) ||
+                                (!pushTopDashboard?.isVip &&
+                                  Number(
+                                    pushTopDashboard?.remainingThisWeek ?? 0
+                                  ) <= 0)
+                              }
+                              className={`text-blue-600 hover:text-blue-900 ${
+                                job.Status !== 1 ||
+                                dashboardLoading ||
+                                (pushTopDashboard?.isVip &&
+                                  Number(pushTopDashboard?.remainingToday) <=
+                                    0) ||
+                                (!pushTopDashboard?.isVip &&
+                                  Number(
+                                    pushTopDashboard?.remainingThisWeek ?? 0
+                                  ) <= 0)
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : ""
+                              }`}
+                            >
+                              <FiArrowUpCircle
+                                className={`h-4 w-4 ${
+                                  pushingId === job.JobID ? "animate-pulse" : ""
+                                }`}
+                              />
+                            </button>
+                            <button
+                              title="Ứng viên đã ứng tuyển"
+                              onClick={() =>
+                                toast("Danh sách ứng viên sẽ được bổ sung sau.")
+                              }
+                              disabled={job.Status === 0 || job.Status === 4}
+                              className={`text-blue-600 hover:text-gray-900 ${
+                                job.Status === 0 || job.Status === 4
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : ""
+                              }`}
+                            >
+                              <FiUsers className="w-4 h-4" />
+                            </button>
+                            <button
+                              title="Đóng bài tuyển dụng"
+                              onClick={() => confirmCloseJob(job)}
+                              disabled={job.Status !== 1}
+                              className={`text-red-600 hover:text-red-900 ${
+                                job.Status !== 1
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : ""
+                              }`}
+                            >
+                              <FiXCircle className="w-4 h-4" />
+                            </button>
+                            <button
+                              title="Mở lại bài tuyển dụng"
+                              onClick={() => confirmReopenJob(job)}
+                              disabled={job.Status !== 2}
+                              className={`text-emerald-600 hover:text-emerald-900 ${
+                                job.Status !== 2
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : ""
+                              }`}
+                            >
+                              <FiRotateCcw className="w-4 h-4" />
+                            </button>
+                            <button
+                              title="Xóa"
+                              onClick={() => confirmDeleteJob(job)}
+                              disabled={
+                                Number(job.Status) === 1 ||
+                                deletingId === job.JobID
+                              }
+                              className={`text-red-600 hover:text-red-900 ${
+                                Number(job.Status) === 1 ||
+                                deletingId === job.JobID
+                                  ? "opacity-50 cursor-not-allowed"
+                                  : ""
+                              }`}
+                            >
+                              <FiTrash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+
+        <aside className="lg:sticky lg:top-6 lg:self-start">
+          <div className="p-4 bg-white border border-gray-100 shadow-sm rounded-xl">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-gray-900">
+                Quản lý đẩy top
+              </div>
+              <button
+                onClick={loadPushTopDashboard}
+                disabled={dashboardLoading}
+                className="text-xs font-semibold text-blue-700 hover:text-blue-900 disabled:opacity-60"
+              >
+                {dashboardLoading ? "Đang tải..." : "Làm mới"}
+              </button>
+            </div>
+
+            <div className="p-3 mt-3 border border-gray-100 rounded-lg bg-gray-50">
+              {pushTopDashboard ? (
+                <div className="space-y-2 text-sm text-gray-800">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-gray-700">Gói</span>
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        pushTopDashboard.isVip
+                          ? "bg-yellow-100 text-yellow-800"
+                          : "bg-gray-200 text-gray-700"
+                      }`}
+                    >
+                      {pushTopDashboard.isVip ? "VIP" : "Thường"}
+                    </span>
+                  </div>
+
+                  {pushTopDashboard.isVip ? (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-700">Còn lại hôm nay</span>
+                        <span className="font-semibold">
+                          {pushTopDashboard.remainingToday}/
+                          {pushTopDashboard.vipDailyLimit}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-700">Đã dùng</span>
+                        <span className="font-semibold">
+                          {pushTopDashboard.usedToday}
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-gray-700">
+                        Quy tắc:{" "}
+                        <span className="font-semibold">
+                          1 lần/tuần (toàn bộ bài)
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-700">Còn lại tuần này</span>
+                        <span className="font-semibold">
+                          {pushTopDashboard.remainingThisWeek ?? "—"}/
+                          {pushTopDashboard.weeklyLimit ?? 1}
+                        </span>
+                      </div>
+                      {pushTopDashboard.lastPushedThisWeek ? (
+                        <div className="text-xs text-gray-600">
+                          Đã đẩy:{" "}
+                          <span className="font-semibold text-gray-800">
+                            {pushTopDashboard.lastPushedThisWeek.JobTitle}
+                          </span>
+                          {" · "}
+                          {formatDate(
+                            pushTopDashboard.lastPushedThisWeek.LastPushedAt
+                          )}
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-600">Chưa có dữ liệu.</div>
               )}
-            </tbody>
-          </table>
-        </div>
+            </div>
+
+            <div className="mt-4">
+              <div className="text-sm font-semibold text-gray-900">
+                Top 10 bài đẩy gần nhất
+              </div>
+              <div className="mt-2 space-y-2">
+                {(pushTopDashboard?.recent || []).length === 0 ? (
+                  <div className="text-sm text-gray-600">
+                    Chưa có lượt đẩy top.
+                  </div>
+                ) : (
+                  pushTopDashboard.recent.map((j) => (
+                    <div
+                      key={j.LogID ?? `${j.JobID}-${j.LastPushedAt}`}
+                      className="p-3 border border-gray-100 rounded-lg"
+                    >
+                      <div className="text-sm font-semibold text-gray-900 line-clamp-2">
+                        {j.JobTitle}
+                      </div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        {formatDate(j.LastPushedAt)}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        </aside>
       </div>
 
-      {renderAddModal()}
-      {renderDetailModal()}
+      <JobPostAddEditModal
+        key={addModalResetKey}
+        open={addModalOpen}
+        mode="create"
+        categories={categories}
+        specializations={specializations}
+        onClose={() => {
+          resetFormState();
+          setAddModalOpen(false);
+        }}
+        onCreate={async (payload) => {
+          await jobApi.createJob(payload);
+          await loadJobs();
+          await loadPushTopDashboard();
+        }}
+      />
+      <JobPostAddEditModal
+        key={editModalResetKey}
+        open={editModalOpen}
+        mode="edit"
+        initialJob={editJob}
+        categories={categories}
+        specializations={specializations}
+        onClose={() => {
+          setEditModalOpen(false);
+          setEditJob(null);
+        }}
+        onUpdate={async (jobId, payload) => {
+          await jobApi.updateJob(jobId, payload);
+          await loadJobs();
+          await loadPushTopDashboard();
+        }}
+      />
+      <JobPostDetailModal
+        open={!!detailJob}
+        job={detailJob}
+        categories={categories}
+        specMap={specMap}
+        onClose={() => setDetailJob(null)}
+      />
+
+      <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDanger={confirmModal.isDanger}
+        confirmText={confirmModal.confirmText}
+        onClose={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+        onConfirm={confirmModal.onConfirm || (() => {})}
+      />
     </div>
   );
 };
