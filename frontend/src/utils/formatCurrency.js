@@ -1,7 +1,15 @@
-export const formatCurrency = (amount) => {
-  if (amount === 0) return "Miễn phí";
+export const formatCurrency = (amount, options = {}) => {
+  const { showSymbol = true, fractionDigits = 0 } = options;
+
+  if (amount === 0) return showSymbol ? "Miễn phí" : "0";
+
+  const num = Number(amount);
+  if (Number.isNaN(num)) return "";
+
   return new Intl.NumberFormat("vi-VN", {
-    style: "currency",
+    style: showSymbol ? "currency" : "decimal",
     currency: "VND",
-  }).format(amount);
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(num);
 };
