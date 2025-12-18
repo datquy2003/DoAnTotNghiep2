@@ -10,16 +10,38 @@ export default function AdminJobDetailModal({ open, job, loading, onClose }) {
   const workingTimes = useMemo(() => {
     const raw = job?.WorkingTimes;
     if (!raw) return [];
-    if (Array.isArray(raw)) return raw;
-    if (typeof raw === "string") {
-      try {
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch (e) {
-        return [];
-      }
+    const arr = Array.isArray(raw)
+      ? raw
+      : typeof raw === "string"
+      ? (() => {
+          try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+          } catch (e) {
+            return [];
+          }
+        })()
+      : [];
+
+    const normalized = arr
+      .map((x) => ({
+        dayFrom: (x?.dayFrom || "").toString().trim(),
+        dayTo: (x?.dayTo || "").toString().trim(),
+        timeFrom: (x?.timeFrom || "").toString().trim(),
+        timeTo: (x?.timeTo || "").toString().trim(),
+        id: x?.id,
+      }))
+      .filter((x) => x.dayFrom || x.dayTo || x.timeFrom || x.timeTo);
+
+    const seen = new Set();
+    const deduped = [];
+    for (const x of normalized) {
+      const key = `${x.dayFrom}|${x.dayTo}|${x.timeFrom}|${x.timeTo}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(x);
     }
-    return [];
+    return deduped;
   }, [job]);
 
   if (!open) return null;
@@ -56,186 +78,228 @@ export default function AdminJobDetailModal({ open, job, loading, onClose }) {
             <div className="text-sm text-gray-600">Không có dữ liệu.</div>
           ) : (
             <>
+              {Number(job?.Status) === 5 ? (
+                <div className="space-y-3">
+                  {job?.ReasonRejected || job?.reasonRejected ? (
+                    <div className="p-4 border border-red-100 rounded-xl bg-red-50">
+                      <div className="text-sm font-bold text-red-800">
+                        Lý do từ chối
+                      </div>
+                      <div className="mt-2 text-sm text-red-900 whitespace-pre-wrap">
+                        {job?.ReasonRejected || job?.reasonRejected}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {job?.ConfirmedAfterReject || job?.confirmedAfterReject ? (
+                    <div className="p-4 border border-blue-100 rounded-xl bg-blue-50">
+                      <div className="text-sm font-bold text-blue-800">
+                        Xác nhận đã chỉnh sửa
+                      </div>
+                      <div className="mt-2 text-sm text-blue-900 whitespace-pre-wrap">
+                        {job?.ConfirmedAfterReject || job?.confirmedAfterReject}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               <div className="text-xl font-bold text-gray-900">
                 <span className="font-semibold text-gray-700">Tiêu đề:</span>{" "}
                 {job.JobTitle || "—"}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
-                <div className="space-y-3">
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-700 min-w-[140px]">
-                      Danh mục:
-                    </span>
-                    <span className="flex-1 text-gray-900">
-                      {job.CategoryName || "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-700 min-w-[140px]">
-                      Mức lương:
-                    </span>
-                    <span className="flex-1 text-gray-900">
-                      {renderSalary(job.SalaryMin, job.SalaryMax)}
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-700 min-w-[140px]">
-                      Trình độ học vấn:
-                    </span>
-                    <span className="flex-1 text-gray-900">
-                      {job.EducationLevel || "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-700 min-w-[140px]">
-                      Vị trí công việc:
-                    </span>
-                    <span className="flex-1 text-gray-900">
-                      {job.JobType || "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-700 min-w-[140px]">
-                      Địa điểm:
-                    </span>
-                    <span className="flex-1 text-gray-900">
-                      {job.Location || "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-700 min-w-[140px]">
-                      Thời gian làm việc:
-                    </span>
-                    <span className="flex-1 text-gray-900">
-                      {workingTimes.length > 0 ? (
-                        <div className="space-y-1">
-                          {workingTimes.map((wt, idx) => (
-                            <div
-                              key={wt?.shiftGroupId || idx}
-                              className="flex flex-wrap items-center gap-2 text-sm"
-                            >
-                              <span className="px-2 py-1 text-blue-700 border border-blue-100 rounded-full bg-blue-50">
-                                {wt.dayFrom || "—"}
-                                {wt.dayTo && wt.dayTo !== wt.dayFrom
-                                  ? ` - ${wt.dayTo}`
-                                  : ""}
-                              </span>
-                              <span className="px-2 py-1 text-green-700 border border-green-100 rounded-full bg-green-50">
-                                {wt.timeFrom || "—"}{" "}
-                                {wt.timeTo ? `- ${wt.timeTo}` : ""}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        "Thời gian làm việc linh hoạt"
-                      )}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-700 min-w-[140px]">
-                      Chuyên môn:
-                    </span>
-                    <span className="flex-1 text-gray-900">
-                      {job.SpecializationName ? (
-                        <span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-100 inline-block max-w-[320px] whitespace-normal text-left">
-                          {job.SpecializationName}
+              <div className="grid grid-cols-1 gap-6">
+                <div className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[140px]">
+                          Danh mục:
                         </span>
-                      ) : (
-                        "—"
-                      )}
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-700 min-w-[140px]">
-                      Kinh nghiệm:
-                    </span>
-                    <span className="flex-1 text-gray-900">
-                      {job.Experience || "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-700 min-w-[140px]">
-                      Số lượng tuyển dụng:
-                    </span>
-                    <span className="flex-1 text-gray-900">
-                      {job.VacancyCount || "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-gray-700 min-w-[140px]">
-                      Trạng thái:
-                    </span>
-                    <span className="flex-1 text-gray-900">
-                      {STATUS_CONFIG[job.Status]?.label ||
-                        `Trạng thái ${job.Status}`}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                        <span className="flex-1 text-gray-900">
+                          {job.CategoryName || "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[140px]">
+                          Mức lương:
+                        </span>
+                        <span className="flex-1 text-gray-900">
+                          {renderSalary(job.SalaryMin, job.SalaryMax)}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[140px]">
+                          Trình độ học vấn:
+                        </span>
+                        <span className="flex-1 text-gray-900">
+                          {job.EducationLevel || "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[140px]">
+                          Vị trí công việc:
+                        </span>
+                        <span className="flex-1 text-gray-900">
+                          {job.JobType || "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[140px]">
+                          Địa điểm:
+                        </span>
+                        <span className="flex-1 text-gray-900">
+                          {job.Location || "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[140px]">
+                          Thời gian làm việc:
+                        </span>
+                        <span className="flex-1 text-gray-900">
+                          {workingTimes.length > 0 ? (
+                            <div className="space-y-1">
+                              {workingTimes.map((wt, idx) => (
+                                <div
+                                  key={wt?.shiftGroupId || idx}
+                                  className="flex flex-wrap items-center gap-2 text-sm"
+                                >
+                                  <span className="px-2 py-1 text-blue-700 border border-blue-100 rounded-full bg-blue-50">
+                                    {wt.dayFrom || "—"}
+                                    {wt.dayTo && wt.dayTo !== wt.dayFrom
+                                      ? ` - ${wt.dayTo}`
+                                      : ""}
+                                  </span>
+                                  <span className="px-2 py-1 text-green-700 border border-green-100 rounded-full bg-green-50">
+                                    {wt.timeFrom || "—"}{" "}
+                                    {wt.timeTo ? `- ${wt.timeTo}` : ""}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            "Thời gian làm việc linh hoạt"
+                          )}
+                        </span>
+                      </div>
+                    </div>
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <div className="font-semibold text-gray-700">
-                    Mô tả công việc:
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[140px]">
+                          Chuyên môn:
+                        </span>
+                        <span className="flex-1 text-gray-900">
+                          {job.SpecializationName ? (
+                            <span className="px-3 py-1 text-xs font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-100 inline-block max-w-[320px] whitespace-normal text-left">
+                              {job.SpecializationName}
+                            </span>
+                          ) : (
+                            "—"
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[140px]">
+                          Kinh nghiệm:
+                        </span>
+                        <span className="flex-1 text-gray-900">
+                          {job.Experience || "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[140px]">
+                          Số lượng tuyển dụng:
+                        </span>
+                        <span className="flex-1 text-gray-900">
+                          {job.VacancyCount || "—"}
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[140px]">
+                          Trạng thái:
+                        </span>
+                        <span className="flex-1 text-gray-900">
+                          {STATUS_CONFIG[job.Status]?.label ||
+                            `Trạng thái ${job.Status}`}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="min-h-[120px] rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900">
-                    {renderJobPostRichText(job?.JobDescription)}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="font-semibold text-gray-700">Yêu cầu:</div>
-                  <div className="min-h-[120px] rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900">
-                    {renderJobPostRichText(job?.Requirements)}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <div className="font-semibold text-gray-700">Phúc lợi:</div>
-                  <div className="min-h-[100px] rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900">
-                    {renderJobPostRichText(job?.Benefits)}
-                  </div>
-                </div>
-              </div>
 
-              <div className="overflow-hidden border border-gray-200 rounded-lg">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
-                        Tạo lúc:
-                      </th>
-                      <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
-                        Được duyệt lúc:
-                      </th>
-                      <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
-                        Hết hạn:
-                      </th>
-                      <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
-                        Đẩy top lúc:
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr>
-                      <td className="px-4 py-3 text-gray-900">
-                        {formatDate(job?.CreatedAt) || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-gray-900">
-                        {formatDate(job?.ApprovedAt) || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-gray-900">
-                        {formatDateOnly(job?.ExpiresAt) || "—"}
-                      </td>
-                      <td className="px-4 py-3 text-gray-900">
-                        {formatDate(job?.LastPushedAt) || "—"}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <div className="font-semibold text-gray-700">
+                        Mô tả công việc:
+                      </div>
+                      <div className="min-h-[120px] rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900">
+                        {renderJobPostRichText(job?.JobDescription)}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="font-semibold text-gray-700">
+                        Yêu cầu:
+                      </div>
+                      <div className="min-h-[120px] rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900">
+                        {renderJobPostRichText(job?.Requirements)}
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="font-semibold text-gray-700">
+                        Phúc lợi:
+                      </div>
+                      <div className="min-h-[100px] rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-gray-900">
+                        {renderJobPostRichText(job?.Benefits)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="overflow-hidden border border-gray-200 rounded-lg">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
+                            Tạo lúc:
+                          </th>
+                          {![0, 5].includes(Number(job?.Status)) ? (
+                            <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
+                              Được duyệt lúc:
+                            </th>
+                          ) : null}
+                          <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
+                            Hết hạn:
+                          </th>
+                          {![0, 5].includes(Number(job?.Status)) ? (
+                            <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
+                              Đẩy top lúc:
+                            </th>
+                          ) : null}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="px-4 py-3 text-gray-900">
+                            {formatDate(job?.CreatedAt) || "—"}
+                          </td>
+                          {![0, 5].includes(Number(job?.Status)) ? (
+                            <td className="px-4 py-3 text-gray-900">
+                              {formatDate(job?.ApprovedAt) || "—"}
+                            </td>
+                          ) : null}
+                          <td className="px-4 py-3 text-gray-900">
+                            {formatDateOnly(job?.ExpiresAt) || "—"}
+                          </td>
+                          {![0, 5].includes(Number(job?.Status)) ? (
+                            <td className="px-4 py-3 text-gray-900">
+                              {formatDate(job?.LastPushedAt) || "—"}
+                            </td>
+                          ) : null}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
             </>
           )}

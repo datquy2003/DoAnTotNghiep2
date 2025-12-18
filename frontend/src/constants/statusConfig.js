@@ -4,4 +4,5 @@ export const STATUS_CONFIG = {
   2: { label: "Đã đóng", className: "bg-fuchsia-100 text-fuchsia-700" },
   3: { label: "Đã hết hạn", className: "bg-red-100 text-red-700" },
   4: { label: "Đã bị từ chối", className: "bg-neutral-200 text-neutral-700" },
+  5: { label: "Đăng lại", className: "bg-lime-200 text-lime-700" },
 };

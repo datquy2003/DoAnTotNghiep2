@@ -37,7 +37,15 @@ export default function JobPostDetailModal({
         id: x?.id,
       }))
       .filter((x) => x.dayFrom || x.dayTo || x.timeFrom || x.timeTo);
-    return meaningful;
+    const seen = new Set();
+    const deduped = [];
+    for (const x of meaningful) {
+      const key = `${x.dayFrom}|${x.dayTo}|${x.timeFrom}|${x.timeTo}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(x);
+    }
+    return deduped;
   }, [job]);
 
   const leftRows = useMemo(() => {
@@ -195,15 +203,19 @@ export default function JobPostDetailModal({
                   <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
                     Tạo lúc:
                   </th>
-                  <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
-                    Được duyệt lúc:
-                  </th>
+                  {![0, 4, 5].includes(Number(job?.Status)) ? (
+                    <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
+                      Được duyệt lúc:
+                    </th>
+                  ) : null}
                   <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
                     Hết hạn lúc:
                   </th>
-                  <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
-                    Đẩy top lúc:
-                  </th>
+                  {![0, 4, 5].includes(Number(job?.Status)) ? (
+                    <th className="px-4 py-3 text-sm font-semibold text-left text-gray-700">
+                      Đẩy top lúc:
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -211,15 +223,19 @@ export default function JobPostDetailModal({
                   <td className="px-4 py-3 text-gray-900">
                     {renderDateOnly(job?.CreatedAt)}
                   </td>
-                  <td className="px-4 py-3 text-gray-900">
-                    {renderDateOnly(job?.ApprovedAt)}
-                  </td>
+                  {![0, 4, 5].includes(Number(job?.Status)) ? (
+                    <td className="px-4 py-3 text-gray-900">
+                      {renderDateOnly(job?.ApprovedAt)}
+                    </td>
+                  ) : null}
                   <td className="px-4 py-3 text-gray-900">
                     {renderDateOnly(job?.ExpiresAt)}
                   </td>
-                  <td className="px-4 py-3 text-gray-900">
-                    {renderDateOnly(job?.LastPushedAt)}
-                  </td>
+                  {![0, 4, 5].includes(Number(job?.Status)) ? (
+                    <td className="px-4 py-3 text-gray-900">
+                      {renderDateOnly(job?.LastPushedAt)}
+                    </td>
+                  ) : null}
                 </tr>
               </tbody>
             </table>

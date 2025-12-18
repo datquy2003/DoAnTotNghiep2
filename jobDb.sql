@@ -159,10 +159,12 @@ CREATE TABLE Jobs (
     JobType nvarchar(50),
     Experience nvarchar(20),
 	LastPushedAt datetime,
+	ReasonRejected ntext,
+	ConfirmedAfterReject ntext,
     
     -- CẬP NHẬT: Status kiểu TINYINT
-    -- 0: Chờ duyệt, 1: Đang tuyển, 2: Đã đóng, 3: Đã hết hạn, 4: Đã bị từ chối
-    Status TINYINT NOT NULL DEFAULT 0, 
+    -- 0: Chờ duyệt, 1: Đang tuyển, 2: Đã đóng, 3: Đã hết hạn, 4: Đã bị từ chối, 5: Đăng lại
+    Status TINYINT NOT NULL DEFAULT 0,
     
     CreatedAt datetime DEFAULT GETDATE(),
     ApprovedAt datetime,
@@ -358,9 +360,9 @@ CREATE TABLE JobWorkingShifts (
     ShiftID INT IDENTITY(1,1) PRIMARY KEY,
     JobID INT NOT NULL,
 
-    ShiftGroupID UNIQUEIDENTIFIER NULL,
-    RangeDayFrom TINYINT NULL,
-    RangeDayTo TINYINT NULL,
+    ShiftGroupID UNIQUEIDENTIFIER,
+    RangeDayFrom TINYINT,
+    RangeDayTo TINYINT,
 
     DayOfWeek TINYINT NOT NULL,
 

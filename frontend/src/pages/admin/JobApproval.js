@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
 import { FiCheckCircle, FiEye, FiRefreshCw, FiXCircle } from "react-icons/fi";
 import { adminApi } from "../../api/adminApi";
 import { formatDate } from "../../utils/formatDate";
 import { renderSalary } from "../../utils/renderSalary";
 import { formatDateOnly } from "../../utils/formatDateOnly";
+import { STATUS_CONFIG } from "../../constants/statusConfig";
 import ConfirmationModal from "../../components/modals/ConfirmationModal";
 import AdminJobDetailModal from "./components/AdminJobDetailModal";
 
@@ -16,6 +18,11 @@ const JobApproval = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [jobDetail, setJobDetail] = useState(null);
   const [actingId, setActingId] = useState(null);
+  const [rejectModal, setRejectModal] = useState({
+    isOpen: false,
+    jobId: null,
+    reason: "",
+  });
   const [confirmModal, setConfirmModal] = useState({
     isOpen: false,
     title: "",
@@ -97,34 +104,36 @@ const JobApproval = () => {
   };
 
   const reject = (jobId) => {
-    setConfirmModal({
-      isOpen: true,
-      title: "Từ chối bài đăng",
-      message: "Bạn chắc chắn muốn từ chối bài tuyển dụng này?",
-      confirmText: "Từ chối",
-      isDanger: true,
-      onConfirm: async () => {
-        setConfirmModal((p) => ({ ...p, isOpen: false }));
-        setActingId(jobId);
-        try {
-          const res = await adminApi.rejectJob(jobId);
-          toast.success(res?.data?.message || "Đã từ chối bài đăng.");
-          setJobs((prev) => prev.filter((j) => j.JobID !== jobId));
-          if (selectedJobId === jobId) {
-            setDetailOpen(false);
-            setSelectedJobId(null);
-            setJobDetail(null);
-          }
-        } catch (error) {
-          console.error("Lỗi reject job:", error);
-          toast.error(
-            error?.response?.data?.message || "Không thể từ chối bài đăng."
-          );
-        } finally {
-          setActingId(null);
-        }
-      },
-    });
+    setRejectModal({ isOpen: true, jobId, reason: "" });
+  };
+
+  const submitReject = async () => {
+    const jobId = rejectModal.jobId;
+    const reason = (rejectModal.reason || "").trim();
+    if (!reason) {
+      toast.error("Vui lòng nhập lý do từ chối.");
+      return;
+    }
+
+    setRejectModal({ isOpen: false, jobId: null, reason: "" });
+    setActingId(jobId);
+    try {
+      const res = await adminApi.rejectJob(jobId, { reasonRejected: reason });
+      toast.success(res?.data?.message || "Đã từ chối bài đăng.");
+      setJobs((prev) => prev.filter((j) => j.JobID !== jobId));
+      if (selectedJobId === jobId) {
+        setDetailOpen(false);
+        setSelectedJobId(null);
+        setJobDetail(null);
+      }
+    } catch (error) {
+      console.error("Lỗi reject job:", error);
+      toast.error(
+        error?.response?.data?.message || "Không thể từ chối bài đăng."
+      );
+    } finally {
+      setActingId(null);
+    }
   };
 
   const tableRows = useMemo(() => jobs, [jobs]);
@@ -171,6 +180,9 @@ const JobApproval = () => {
                   Chuyên môn
                 </th>
                 <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                  Trạng thái
+                </th>
+                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
                   Ngày tạo
                 </th>
                 <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
@@ -185,7 +197,7 @@ const JobApproval = () => {
               {loading ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-10 text-sm text-center text-gray-500"
                   >
                     Đang tải...
@@ -194,7 +206,7 @@ const JobApproval = () => {
               ) : tableRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={7}
+                    colSpan={8}
                     className="px-4 py-10 text-sm text-center text-gray-500"
                   >
                     Không có bài đăng chờ duyệt.
@@ -220,6 +232,20 @@ const JobApproval = () => {
                       ) : (
                         <span className="text-center text-gray-600">—</span>
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700">
+                      {(() => {
+                        const st = STATUS_CONFIG?.[Number(j.Status)] || null;
+                        if (!st)
+                          return <span className="text-gray-600">—</span>;
+                        return (
+                          <span
+                            className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${st.className}`}
+                          >
+                            {st.label}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
                       {formatDate(j.CreatedAt)}
@@ -280,6 +306,60 @@ const JobApproval = () => {
           setJobDetail(null);
         }}
       />
+
+      {rejectModal.isOpen &&
+        (() => {
+          const modalContent = (
+            <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm">
+              <div
+                className="absolute inset-0"
+                onClick={() =>
+                  setRejectModal({ isOpen: false, jobId: null, reason: "" })
+                }
+              />
+              <div className="relative w-full max-w-lg p-5 bg-white border border-gray-100 shadow-2xl rounded-xl">
+                <div className="text-lg font-bold text-gray-900">
+                  Lý do từ chối
+                </div>
+                <div className="mt-1 text-sm text-gray-600">
+                  Nhập lý do để nhà tuyển dụng chỉnh sửa và đăng lại.
+                </div>
+
+                <textarea
+                  value={rejectModal.reason}
+                  onChange={(e) =>
+                    setRejectModal((p) => ({ ...p, reason: e.target.value }))
+                  }
+                  rows={5}
+                  className="w-full px-3 py-2 mt-4 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-200"
+                  placeholder="Nhập lý do từ chối..."
+                />
+
+                <div className="flex items-center justify-end gap-2 mt-4">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setRejectModal({ isOpen: false, jobId: null, reason: "" })
+                    }
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+                  >
+                    Hủy
+                  </button>
+                  <button
+                    type="button"
+                    onClick={submitReject}
+                    className="px-4 py-2 font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700"
+                  >
+                    Từ chối
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+
+          if (typeof document === "undefined") return modalContent;
+          return createPortal(modalContent, document.body);
+        })()}
 
       <ConfirmationModal
         isOpen={confirmModal.isOpen}

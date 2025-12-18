@@ -9,6 +9,7 @@ import {
   FiUsers,
   FiXCircle,
   FiRotateCcw,
+  FiMessageSquare,
 } from "react-icons/fi";
 import toast from "react-hot-toast";
 import { jobApi } from "../../api/jobApi";
@@ -34,6 +35,9 @@ const JobPostsManagement = () => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editModalResetKey, setEditModalResetKey] = useState(0);
   const [editJob, setEditJob] = useState(null);
+  const [resubmitModalOpen, setResubmitModalOpen] = useState(false);
+  const [resubmitModalResetKey, setResubmitModalResetKey] = useState(0);
+  const [resubmitJob, setResubmitJob] = useState(null);
   const [detailJob, setDetailJob] = useState(null);
   const [applicantsJob, setApplicantsJob] = useState(null);
   const [specMap, setSpecMap] = useState({});
@@ -60,11 +64,18 @@ const JobPostsManagement = () => {
 
   const resetFormState = () => setAddModalResetKey((k) => k + 1);
   const resetEditFormState = () => setEditModalResetKey((k) => k + 1);
+  const resetResubmitFormState = () => setResubmitModalResetKey((k) => k + 1);
 
   const openEditModal = (job) => {
     setEditJob(job || null);
     resetEditFormState();
     setEditModalOpen(true);
+  };
+
+  const openResubmitModal = (job) => {
+    setResubmitJob(job || null);
+    resetResubmitFormState();
+    setResubmitModalOpen(true);
   };
 
   const normalizeText = (s) =>
@@ -765,6 +776,17 @@ const JobPostsManagement = () => {
                             >
                               <FiEdit2 className="w-4 h-4" />
                             </button>
+                            {Number(job.Status) === 4 ? (
+                              <>
+                                <button
+                                  title="Xem lý do bị từ chối & chỉnh sửa lại"
+                                  onClick={() => openResubmitModal(job)}
+                                  className="text-amber-700 hover:text-amber-900"
+                                >
+                                  <FiMessageSquare className="w-4 h-4" />
+                                </button>
+                              </>
+                            ) : null}
                             <button
                               title="Đẩy top"
                               onClick={() => handlePushTop(job.JobID)}
@@ -803,9 +825,15 @@ const JobPostsManagement = () => {
                             <button
                               title="Ứng viên đã ứng tuyển"
                               onClick={() => setApplicantsJob(job)}
-                              disabled={job.Status === 0 || job.Status === 4}
+                              disabled={
+                                Number(job.Status) === 0 ||
+                                Number(job.Status) === 4 ||
+                                Number(job.Status) === 5
+                              }
                               className={`text-blue-600 hover:text-gray-900 ${
-                                job.Status === 0 || job.Status === 4
+                                Number(job.Status) === 0 ||
+                                Number(job.Status) === 4 ||
+                                Number(job.Status) === 5
                                   ? "opacity-50 cursor-not-allowed"
                                   : ""
                               }`}
@@ -997,6 +1025,23 @@ const JobPostsManagement = () => {
         }}
         onUpdate={async (jobId, payload) => {
           await jobApi.updateJob(jobId, payload);
+          await loadJobs();
+          await loadPushTopDashboard();
+        }}
+      />
+      <JobPostAddEditModal
+        key={resubmitModalResetKey}
+        open={resubmitModalOpen}
+        mode="resubmit"
+        initialJob={resubmitJob}
+        categories={categories}
+        specializations={specializations}
+        onClose={() => {
+          setResubmitModalOpen(false);
+          setResubmitJob(null);
+        }}
+        onResubmit={async (jobId, payload) => {
+          await jobApi.resubmitJob(jobId, payload);
           await loadJobs();
           await loadPushTopDashboard();
         }}

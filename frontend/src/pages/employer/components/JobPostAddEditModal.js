@@ -24,6 +24,7 @@ const getInitialJobState = () => ({
   Requirements: "",
   Benefits: "",
   ExpiresAt: "",
+  ConfirmedAfterReject: "",
 });
 
 export default function JobPostAddEditModal({
@@ -33,6 +34,7 @@ export default function JobPostAddEditModal({
   onClose,
   onCreate,
   onUpdate,
+  onResubmit,
   mode = "create",
   initialJob = null,
 }) {
@@ -110,7 +112,7 @@ export default function JobPostAddEditModal({
       }));
     };
 
-    if (mode === "edit" && initialJob) {
+    if ((mode === "edit" || mode === "resubmit") && initialJob) {
       const wt = parseWorkingTimes(initialJob.WorkingTimes);
 
       setJob({
@@ -145,6 +147,8 @@ export default function JobPostAddEditModal({
         Requirements: initialJob.Requirements || "",
         Benefits: initialJob.Benefits || "",
         ExpiresAt: toDateInputValue(initialJob.ExpiresAt),
+        ConfirmedAfterReject:
+          mode === "resubmit" ? "" : initialJob.ConfirmedAfterReject || "",
       });
 
       const catName =
@@ -373,12 +377,147 @@ export default function JobPostAddEditModal({
       );
   }, [filteredSpecsGlobal, job.CategoryID]);
 
+  const toDateInputValue = (value) => {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    const yyyy = d.getUTCFullYear();
+    const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const dd = String(d.getUTCDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const normalizeWorkingTimesForCompare = (raw) => {
+    if (!raw) return [];
+    let wt = raw;
+    if (typeof wt === "string") {
+      try {
+        wt = JSON.parse(wt);
+      } catch (e) {
+        wt = [];
+      }
+    }
+    if (!Array.isArray(wt)) return [];
+    const cleaned = wt
+      .map((x) => ({
+        dayFrom: (x?.dayFrom || "").toString().trim(),
+        dayTo: (x?.dayTo || "").toString().trim(),
+        timeFrom: (x?.timeFrom || "").toString().trim(),
+        timeTo: (x?.timeTo || "").toString().trim(),
+      }))
+      .filter((x) => x.dayFrom || x.dayTo || x.timeFrom || x.timeTo);
+    cleaned.sort((a, b) => {
+      const ak = `${a.dayFrom}|${a.dayTo}|${a.timeFrom}|${a.timeTo}`;
+      const bk = `${b.dayFrom}|${b.dayTo}|${b.timeFrom}|${b.timeTo}`;
+      return ak.localeCompare(bk, "vi", { sensitivity: "base" });
+    });
+    return cleaned;
+  };
+
+  const resubmitHasChanges = useMemo(() => {
+    if (mode !== "resubmit") return true;
+    if (!initialJob) return false;
+
+    const normStr = (v) => (v ?? "").toString().trim();
+    const normNumOrNull = (v) => {
+      if (v == null || v === "") return null;
+      const n = Number(v);
+      return Number.isNaN(n) ? null : n;
+    };
+    const normIdOrNull = (v) => {
+      if (v == null || v === "") return null;
+      const n = Number(v);
+      return Number.isNaN(n) ? null : n;
+    };
+
+    const currentComparable = {
+      JobTitle: normStr(job.JobTitle),
+      CategoryID: normIdOrNull(job.CategoryID),
+      SpecializationID: normIdOrNull(job.SpecializationID),
+      Location: normStr(job.Location),
+      JobType: normStr(job.JobType),
+      SalaryMin: normNumOrNull(job.SalaryMin),
+      SalaryMax: normNumOrNull(job.SalaryMax),
+      Experience: normStr(job.Experience),
+      EducationLevel: normStr(job.EducationLevel),
+      VacancyCount: normNumOrNull(job.VacancyCount),
+      WorkingTimes: normalizeWorkingTimesForCompare(job.WorkingTimes),
+      JobDescription: normStr(job.JobDescription),
+      Requirements: normStr(job.Requirements),
+      Benefits: normStr(job.Benefits),
+      ExpiresAt: normStr(job.ExpiresAt),
+    };
+
+    const initialComparable = {
+      JobTitle: normStr(initialJob.JobTitle),
+      CategoryID: normIdOrNull(initialJob.CategoryID),
+      SpecializationID: normIdOrNull(initialJob.SpecializationID),
+      Location: normStr(initialJob.Location),
+      JobType: normStr(initialJob.JobType),
+      SalaryMin: normNumOrNull(initialJob.SalaryMin),
+      SalaryMax: normNumOrNull(initialJob.SalaryMax),
+      Experience: normStr(initialJob.Experience),
+      EducationLevel: normStr(initialJob.EducationLevel),
+      VacancyCount: normNumOrNull(initialJob.VacancyCount),
+      WorkingTimes: normalizeWorkingTimesForCompare(initialJob.WorkingTimes),
+      JobDescription: normStr(initialJob.JobDescription),
+      Requirements: normStr(initialJob.Requirements),
+      Benefits: normStr(initialJob.Benefits),
+      ExpiresAt: normStr(toDateInputValue(initialJob.ExpiresAt)),
+    };
+
+    return (
+      JSON.stringify(currentComparable) !== JSON.stringify(initialComparable)
+    );
+  }, [
+    mode,
+    initialJob,
+    job.JobTitle,
+    job.CategoryID,
+    job.SpecializationID,
+    job.Location,
+    job.JobType,
+    job.SalaryMin,
+    job.SalaryMax,
+    job.Experience,
+    job.EducationLevel,
+    job.VacancyCount,
+    job.WorkingTimes,
+    job.JobDescription,
+    job.Requirements,
+    job.Benefits,
+    job.ExpiresAt,
+  ]);
+
+  const canSubmitResubmit =
+    mode !== "resubmit"
+      ? true
+      : resubmitHasChanges && String(job.ConfirmedAfterReject || "").trim();
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!job.JobTitle || !job.JobDescription || !job.ExpiresAt) {
       toast.error("Vui lòng nhập Tiêu đề, Mô tả và Ngày hết hạn.");
       return;
+    }
+
+    if (mode === "resubmit") {
+      if (
+        !job.ConfirmedAfterReject ||
+        !String(job.ConfirmedAfterReject).trim()
+      ) {
+        toast.error(
+          "Vui lòng nhập xác nhận đã chỉnh sửa theo góp ý của admin."
+        );
+        return;
+      }
+      if (!resubmitHasChanges) {
+        toast.error(
+          "Bạn cần chỉnh sửa ít nhất 1 nội dung so với bài bị từ chối trước đó để có thể đăng lại."
+        );
+        return;
+      }
     }
 
     const min = job.SalaryMin !== "" ? Number(job.SalaryMin) : null;
@@ -489,6 +628,21 @@ export default function JobPostAddEditModal({
         }
         await onUpdate(jobId, payload);
         toast.success("Cập nhật bài đăng thành công.");
+      } else if (mode === "resubmit") {
+        const jobId = initialJob?.JobID;
+        if (!jobId) {
+          toast.error("Không tìm thấy JobID để đăng lại.");
+          return;
+        }
+        if (typeof onResubmit !== "function") {
+          toast.error("Thiếu handler đăng lại bài đăng.");
+          return;
+        }
+        await onResubmit(jobId, {
+          ...payload,
+          ConfirmedAfterReject: String(job.ConfirmedAfterReject || ""),
+        });
+        toast.success("Đã gửi lại bài đăng để admin duyệt.");
       } else {
         await onCreate(payload);
         toast.success("Tạo bài đăng thành công.");
@@ -516,6 +670,8 @@ export default function JobPostAddEditModal({
         error?.response?.data?.message ||
         (mode === "edit"
           ? "Không thể cập nhật bài đăng. Vui lòng thử lại."
+          : mode === "resubmit"
+          ? "Không thể đăng lại bài đăng. Vui lòng thử lại."
           : "Không thể tạo bài đăng. Vui lòng thử lại.");
       toast.error(message);
     }
@@ -529,7 +685,11 @@ export default function JobPostAddEditModal({
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">
-              {mode === "edit" ? "Chỉnh sửa bài đăng" : "Thêm mới bài đăng"}
+              {mode === "edit"
+                ? "Chỉnh sửa bài đăng"
+                : mode === "resubmit"
+                ? "Chỉnh sửa & đăng lại"
+                : "Thêm mới bài đăng"}
             </h3>
           </div>
           <button
@@ -542,6 +702,36 @@ export default function JobPostAddEditModal({
 
         <form onSubmit={handleSubmit}>
           <div className="px-6 py-6 space-y-4 text-gray-700 max-h-[70vh] overflow-y-auto">
+            {mode === "resubmit" &&
+            (initialJob?.ReasonRejected || initialJob?.reasonRejected) ? (
+              <div className="p-4 border border-red-100 rounded-xl bg-red-50">
+                <div className="text-sm font-bold text-red-800">
+                  Lý do bị từ chối (Admin)
+                </div>
+                <div className="mt-2 text-sm text-red-900 whitespace-pre-wrap">
+                  {initialJob?.ReasonRejected || initialJob?.reasonRejected}
+                </div>
+              </div>
+            ) : null}
+
+            {mode === "resubmit" ? (
+              <label className="space-y-1 text-sm">
+                <span className="font-semibold text-gray-800">
+                  Xác nhận đã chỉnh sửa theo góp ý của admin
+                </span>
+                <textarea
+                  required
+                  value={job.ConfirmedAfterReject}
+                  onChange={(e) =>
+                    handleInputChange("ConfirmedAfterReject", e.target.value)
+                  }
+                  rows={4}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Ghi rõ bạn đã chỉnh sửa những gì..."
+                />
+              </label>
+            ) : null}
+
             <div className="grid grid-cols-1 gap-4">
               <label className="space-y-1 text-sm">
                 <span className="font-semibold text-gray-800">Tiêu đề</span>
@@ -1126,6 +1316,7 @@ export default function JobPostAddEditModal({
                             "45",
                             "50",
                             "55",
+                            "59",
                           ].map((m) => (
                             <option key={m} value={m}>
                               {m}
@@ -1194,6 +1385,7 @@ export default function JobPostAddEditModal({
                             "45",
                             "50",
                             "55",
+                            "59",
                           ].map((m) => (
                             <option key={m} value={m}>
                               {m}
@@ -1408,9 +1600,18 @@ export default function JobPostAddEditModal({
             </button>
             <button
               type="submit"
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+              disabled={!canSubmitResubmit}
+              className={`px-4 py-2 text-sm font-medium rounded-lg ${
+                canSubmitResubmit
+                  ? "bg-blue-600 text-white hover:bg-blue-700"
+                  : "bg-gray-300 text-gray-600 cursor-not-allowed"
+              }`}
             >
-              {mode === "edit" ? "Lưu thay đổi" : "Lưu bài đăng"}
+              {mode === "edit"
+                ? "Lưu thay đổi"
+                : mode === "resubmit"
+                ? "Đăng lại"
+                : "Lưu bài đăng"}
             </button>
           </div>
         </form>

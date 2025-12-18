@@ -204,7 +204,7 @@ router.get("/:id/applicants", checkAuth, async (req, res) => {
       .request()
       .input("JobID", sql.Int, jobId)
       .input("EmployerID", sql.NVarChar, employerId).query(`
-        SELECT TOP 1 j.JobID, j.JobTitle
+        SELECT TOP 1 j.JobID, j.JobTitle, j.Status
         FROM Jobs j
         JOIN Companies c ON j.CompanyID = c.CompanyID
         WHERE j.JobID = @JobID AND c.OwnerUserID = @EmployerID
@@ -214,6 +214,12 @@ router.get("/:id/applicants", checkAuth, async (req, res) => {
     if (!job) {
       return res.status(404).json({
         message: "Không tìm thấy bài đăng hoặc bạn không có quyền truy cập.",
+      });
+    }
+    if ([0, 4, 5].includes(Number(job.Status))) {
+      return res.status(400).json({
+        message:
+          "Không thể xem danh sách ứng viên khi bài đăng đang chờ duyệt/đã bị từ chối/đang đăng lại.",
       });
     }
 
@@ -965,6 +971,270 @@ router.patch("/:id", checkAuth, async (req, res) => {
     return res
       .status(500)
       .json({ message: "Lỗi server khi cập nhật bài đăng." });
+  }
+});
+
+router.patch("/:id/resubmit", checkAuth, async (req, res) => {
+  const employerId = req.firebaseUser.uid;
+  const { id } = req.params;
+
+  if (!id || Number.isNaN(Number(id))) {
+    return res.status(400).json({ message: "JobID không hợp lệ." });
+  }
+
+  const {
+    JobTitle,
+    CategoryID,
+    SpecializationID,
+    Location,
+    JobType,
+    SalaryMin,
+    SalaryMax,
+    Experience,
+    EducationLevel,
+    VacancyCount,
+    WorkingTimes,
+    JobDescription,
+    Requirements,
+    Benefits,
+    ExpiresAt,
+    ConfirmedAfterReject,
+  } = req.body || {};
+
+  const finalConfirmedAfterReject =
+    ConfirmedAfterReject ?? ConfirmedAfterReject ?? null;
+
+  if (!finalConfirmedAfterReject || !String(finalConfirmedAfterReject).trim()) {
+    return res.status(400).json({
+      message: "Vui lòng nhập xác nhận đã chỉnh sửa theo góp ý của admin.",
+    });
+  }
+
+  if (!JobTitle || !JobDescription || !ExpiresAt) {
+    return res.status(400).json({
+      message: "Thiếu thông tin bắt buộc (tiêu đề, mô tả, ngày hết hạn).",
+    });
+  }
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+
+    const jobRes = await pool
+      .request()
+      .input("JobID", sql.Int, Number(id))
+      .input("EmployerID", sql.NVarChar, employerId).query(`
+        SELECT TOP 1 j.JobID, j.CompanyID, j.Status
+        FROM Jobs j
+        JOIN Companies c ON j.CompanyID = c.CompanyID
+        WHERE j.JobID = @JobID
+          AND c.OwnerUserID = @EmployerID
+      `);
+
+    const job = jobRes.recordset?.[0];
+    if (!job) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy bài đăng hoặc bạn không có quyền." });
+    }
+
+    if (Number(job.Status) !== 4) {
+      return res.status(400).json({
+        message:
+          "Chỉ có thể đăng lại bài đăng khi trạng thái là 'Đã bị từ chối'.",
+      });
+    }
+
+    const expiresDate = new Date(ExpiresAt);
+    const now = new Date();
+    if (Number.isNaN(expiresDate.getTime()) || expiresDate < now) {
+      return res.status(400).json({
+        message: "Ngày hết hạn không hợp lệ (không được nhỏ hơn hiện tại).",
+      });
+    }
+
+    const dayLabelToNum = {
+      "Thứ 2": 1,
+      "Thứ 3": 2,
+      "Thứ 4": 3,
+      "Thứ 5": 4,
+      "Thứ 6": 5,
+      "Thứ 7": 6,
+      "Chủ nhật": 7,
+    };
+
+    const parseWorkingTimes = (raw) => {
+      if (raw == null) return [];
+      if (!Array.isArray(raw)) return [];
+      const out = [];
+      for (const row of raw) {
+        if (!row) continue;
+        const dayFromLabel = row.dayFrom ?? row.DayFrom ?? row.RangeDayFrom;
+        const dayToLabel = row.dayTo ?? row.DayTo ?? row.RangeDayTo;
+        const timeFrom = row.timeFrom ?? row.TimeFrom ?? null;
+        const timeTo = row.timeTo ?? row.TimeTo ?? null;
+
+        if (!dayFromLabel || !dayToLabel || !timeFrom || !timeTo) continue;
+        const fromNum =
+          dayLabelToNum[String(dayFromLabel).trim()] ?? Number(dayFromLabel);
+        const toNum =
+          dayLabelToNum[String(dayToLabel).trim()] ?? Number(dayToLabel);
+        if (!fromNum || !toNum) continue;
+
+        const days = [];
+        if (fromNum <= toNum) {
+          for (let d = fromNum; d <= toNum; d++) days.push(d);
+        } else {
+          for (let d = fromNum; d <= 7; d++) days.push(d);
+          for (let d = 1; d <= toNum; d++) days.push(d);
+        }
+
+        const groupId =
+          row.shiftGroupId ?? row.ShiftGroupID ?? crypto.randomUUID();
+        for (const d of days) {
+          out.push({
+            day: d,
+            timeFrom: String(timeFrom).trim(),
+            timeTo: String(timeTo).trim(),
+            groupId,
+            rangeDayFrom: fromNum,
+            rangeDayTo: toNum,
+          });
+        }
+      }
+      return out;
+    };
+
+    const shifts = parseWorkingTimes(WorkingTimes);
+
+    let tx;
+    try {
+      tx = new sql.Transaction(pool);
+      await tx.begin(sql.ISOLATION_LEVEL.READ_COMMITTED);
+      const reqTx = () => new sql.Request(tx);
+
+      const schemaRes = await reqTx().query(`
+        SELECT 
+          CASE WHEN COL_LENGTH('Jobs','ConfirmedAfterReject') IS NULL THEN 0 ELSE 1 END AS HasConfirmedAfterReject,
+          CASE WHEN COL_LENGTH('JobWorkingShifts','ShiftGroupID') IS NULL THEN 0 ELSE 1 END AS HasShiftGroup,
+          CASE WHEN COL_LENGTH('JobWorkingShifts','RangeDayFrom') IS NULL THEN 0 ELSE 1 END AS HasRangeDayFrom,
+          CASE WHEN COL_LENGTH('JobWorkingShifts','RangeDayTo') IS NULL THEN 0 ELSE 1 END AS HasRangeDayTo
+      `);
+      const hasConfirmedAfterReject =
+        schemaRes.recordset?.[0]?.HasConfirmedAfterReject === 1;
+      const canStoreGroups =
+        schemaRes.recordset?.[0]?.HasShiftGroup === 1 &&
+        schemaRes.recordset?.[0]?.HasRangeDayFrom === 1 &&
+        schemaRes.recordset?.[0]?.HasRangeDayTo === 1;
+
+      const updateSql = `
+        UPDATE Jobs SET
+          CategoryID = @CategoryID,
+          SpecializationID = @SpecializationID,
+          JobTitle = @JobTitle,
+          JobDescription = @JobDescription,
+          Requirements = @Requirements,
+          Benefits = @Benefits,
+          EducationLevel = @EducationLevel,
+          VacancyCount = @VacancyCount,
+          SalaryMin = @SalaryMin,
+          SalaryMax = @SalaryMax,
+          Location = @Location,
+          JobType = @JobType,
+          Experience = @Experience,
+          ExpiresAt = @ExpiresAt,
+          Status = 5,
+          ApprovedAt = NULL
+          ${
+            hasConfirmedAfterReject
+              ? ", ConfirmedAfterReject = @ConfirmedAfterReject"
+              : ""
+          }
+        WHERE JobID = @JobID AND CompanyID = @CompanyID AND Status = 4
+      `;
+
+      const updateRes = await reqTx()
+        .input("JobID", sql.Int, Number(id))
+        .input("CompanyID", sql.Int, job.CompanyID)
+        .input("CategoryID", sql.Int, CategoryID || null)
+        .input("SpecializationID", sql.Int, SpecializationID || null)
+        .input("JobTitle", sql.NVarChar, JobTitle)
+        .input("JobDescription", sql.NVarChar(sql.MAX), JobDescription)
+        .input("Requirements", sql.NVarChar(sql.MAX), Requirements || null)
+        .input("Benefits", sql.NVarChar(sql.MAX), Benefits || null)
+        .input("EducationLevel", sql.NVarChar, EducationLevel || null)
+        .input("VacancyCount", sql.Int, VacancyCount || 1)
+        .input("SalaryMin", sql.Decimal(18, 2), SalaryMin || null)
+        .input("SalaryMax", sql.Decimal(18, 2), SalaryMax || null)
+        .input("Location", sql.NVarChar, Location || null)
+        .input("JobType", sql.NVarChar, JobType || null)
+        .input("Experience", sql.NVarChar, Experience || null)
+        .input("ExpiresAt", sql.DateTime, expiresDate)
+        .input(
+          "ConfirmedAfterReject",
+          sql.NVarChar(sql.MAX),
+          String(finalConfirmedAfterReject)
+        )
+        .query(updateSql);
+
+      const affected = updateRes?.rowsAffected?.[0] || 0;
+      if (affected === 0) {
+        await tx.rollback();
+        return res.status(400).json({
+          message:
+            "Không thể đăng lại bài đăng (bài có thể đã đổi trạng thái).",
+        });
+      }
+
+      await reqTx()
+        .input("JobID", sql.Int, Number(id))
+        .query("DELETE FROM JobWorkingShifts WHERE JobID = @JobID");
+
+      if (shifts.length > 0) {
+        for (const s of shifts) {
+          if (canStoreGroups) {
+            await reqTx()
+              .input("JobID", sql.Int, Number(id))
+              .input("DayOfWeek", sql.TinyInt, s.day)
+              .input("TimeFrom", sql.VarChar(5), s.timeFrom)
+              .input("TimeTo", sql.VarChar(5), s.timeTo)
+              .input("ShiftGroupID", sql.UniqueIdentifier, s.groupId)
+              .input("RangeDayFrom", sql.TinyInt, s.rangeDayFrom)
+              .input("RangeDayTo", sql.TinyInt, s.rangeDayTo)
+              .query(
+                `
+                INSERT INTO JobWorkingShifts (JobID, DayOfWeek, TimeFrom, TimeTo, ShiftGroupID, RangeDayFrom, RangeDayTo)
+                VALUES (@JobID, @DayOfWeek, CONVERT(time, @TimeFrom), CONVERT(time, @TimeTo), @ShiftGroupID, @RangeDayFrom, @RangeDayTo)
+                `
+              );
+          } else {
+            await reqTx()
+              .input("JobID", sql.Int, Number(id))
+              .input("DayOfWeek", sql.TinyInt, s.day)
+              .input("TimeFrom", sql.VarChar(5), s.timeFrom)
+              .input("TimeTo", sql.VarChar(5), s.timeTo)
+              .query(
+                `
+                INSERT INTO JobWorkingShifts (JobID, DayOfWeek, TimeFrom, TimeTo)
+                VALUES (@JobID, @DayOfWeek, CONVERT(time, @TimeFrom), CONVERT(time, @TimeTo))
+                `
+              );
+          }
+        }
+      }
+
+      await tx.commit();
+      return res
+        .status(200)
+        .json({ message: "Đã gửi lại bài đăng để admin duyệt.", status: 5 });
+    } catch (err) {
+      try {
+        if (tx) await tx.rollback();
+      } catch (e) {}
+      throw err;
+    }
+  } catch (error) {
+    console.error("Lỗi đăng lại bài tuyển dụng:", error);
+    return res.status(500).json({ message: "Lỗi server." });
   }
 });
 

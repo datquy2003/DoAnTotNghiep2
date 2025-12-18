@@ -9,4 +9,5 @@ export const GUIDE_ITEMS = [
   "Icon “Đóng bài tuyển dụng” chỉ khả dụng khi trạng thái là “Đang tuyển”.",
   "Icon “Mở lại bài tuyển dụng” chỉ khả dụng khi trạng thái là “Đã đóng”.",
   "Icon “Xóa” chỉ không khả dụng khi trạng thái là “Đang tuyển” .",
+  "Icon “Xem lí do bị từ chối & chỉnh sửa lại” chỉ khả dụng khi trạng thái là “Đã bị từ chối”.",
 ];

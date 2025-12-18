@@ -3,6 +3,7 @@ import apiClient from "./apiClient";
 const getMyJobs = () => apiClient.get("/jobs/my-jobs");
 const createJob = (data) => apiClient.post("/jobs", data);
 const updateJob = (jobId, data) => apiClient.patch(`/jobs/${jobId}`, data);
+const resubmitJob = (jobId, data) => apiClient.patch(`/jobs/${jobId}/resubmit`, data);
 const getActiveJobs = () => apiClient.get("/jobs/active");
 const applyToJob = (jobId, data) => apiClient.post(`/jobs/${jobId}/apply`, data);
 const getJobApplicants = (jobId) => apiClient.get(`/jobs/${jobId}/applicants`);
@@ -17,6 +18,7 @@ export const jobApi = {
   getMyJobs,
   createJob,
   updateJob,
+  resubmitJob,
   getActiveJobs,
   applyToJob,
   getJobApplicants,
