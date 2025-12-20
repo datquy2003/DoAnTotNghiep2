@@ -37,7 +37,10 @@ const getEffectiveCvLimit = async (dbConnection, userId) => {
       SELECT TOP 1 ISNULL(us.Snapshot_CVStorage, sp.Limit_CVStorage) AS LimitCV
       FROM UserSubscriptions us
       LEFT JOIN SubscriptionPlans sp ON us.PlanID = sp.PlanID
-      WHERE us.UserID = @UserID AND us.Status = 1 AND us.EndDate > GETDATE()
+      WHERE us.UserID = @UserID 
+        AND us.Status = 1 
+        AND us.EndDate > GETDATE()
+        AND ISNULL(us.SnapshotPlanType, sp.PlanType) <> 'ONE_TIME'
       ORDER BY us.EndDate DESC
     `);
 
@@ -92,6 +95,20 @@ router.get("/me", checkAuth, async (req, res) => {
     const pool = await sql.connect(sqlConfig);
     await ensureCandidateRole(pool, userId);
 
+    const userCheck = await pool
+      .request()
+      .input("UserID", sql.NVarChar, userId)
+      .query("SELECT TOP 1 IsBanned FROM Users WHERE FirebaseUserID = @UserID");
+
+    if (
+      userCheck.recordset.length === 0 ||
+      userCheck.recordset[0]?.IsBanned === 1
+    ) {
+      return res.status(404).json({
+        message: "Nội dung bạn tìm không tồn tại, vui lòng kiểm tra lại.",
+      });
+    }
+
     const limit = await getEffectiveCvLimit(pool, userId);
     await enforceCandidateCvLimit(pool, userId, limit);
 
@@ -124,6 +141,20 @@ router.get("/:id/inline", checkAuth, async (req, res) => {
   try {
     const pool = await sql.connect(sqlConfig);
     await ensureCandidateRole(pool, userId);
+
+    const userCheck = await pool
+      .request()
+      .input("UserID", sql.NVarChar, userId)
+      .query("SELECT TOP 1 IsBanned FROM Users WHERE FirebaseUserID = @UserID");
+
+    if (
+      userCheck.recordset.length === 0 ||
+      userCheck.recordset[0]?.IsBanned === 1
+    ) {
+      return res.status(404).json({
+        message: "Nội dung bạn tìm không tồn tại, vui lòng kiểm tra lại.",
+      });
+    }
 
     const cv = await fetchCvById(pool, userId, cvId);
     if (!cv) {

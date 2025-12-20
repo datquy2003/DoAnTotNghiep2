@@ -156,6 +156,11 @@ router.get("/searchable", checkAuth, async (req, res) => {
       FROM CandidateProfiles cp
       JOIN Users u ON u.FirebaseUserID = cp.UserID
       OUTER APPLY (
+        SELECT TOP 1 CompanyID
+        FROM Companies
+        WHERE OwnerUserID = @EmployerID
+      ) empCompany
+      OUTER APPLY (
         SELECT CASE
           WHEN cp.Birthday IS NULL THEN NULL
           ELSE DATEDIFF(year, cp.Birthday, GETDATE()) -
@@ -193,6 +198,11 @@ router.get("/searchable", checkAuth, async (req, res) => {
         ORDER BY us.EndDate DESC
       ) vip
       ${whereClause}
+        AND ISNULL(u.IsBanned, 0) = 0
+        AND (empCompany.CompanyID IS NULL OR NOT EXISTS (
+          SELECT 1 FROM BlockedCompanies bc
+          WHERE bc.UserID = cp.UserID AND bc.CompanyID = empCompany.CompanyID
+        ))
       ORDER BY 
         ISNULL(cp.LastPushedAt, u.CreatedAt) DESC,
         cp.LastPushedAt DESC,
@@ -352,7 +362,10 @@ router.get("/me/push-top/remaining", checkAuth, async (req, res) => {
             SELECT TOP 1 ISNULL(us.Snapshot_PushTopDaily, sp.Limit_PushTopDaily)
             FROM UserSubscriptions us
             LEFT JOIN SubscriptionPlans sp ON us.PlanID = sp.PlanID
-            WHERE us.UserID = @CandidateID AND us.Status = 1 AND us.EndDate > GETDATE()
+            WHERE us.UserID = @CandidateID 
+              AND us.Status = 1 
+              AND us.EndDate > GETDATE()
+              AND ISNULL(us.SnapshotPlanType, sp.PlanType) <> 'ONE_TIME'
             ORDER BY us.EndDate DESC
           ) AS VipLimitDaily
         FROM CandidateProfiles cp
@@ -427,10 +440,14 @@ router.post("/me/push-top", checkAuth, async (req, res) => {
           cp.LastPushedAt,
           cp.PushTopCount,
           (
-            SELECT TOP 1 Snapshot_PushTopDaily 
-            FROM UserSubscriptions
-            WHERE UserID = @CandidateID AND Status = 1 AND EndDate > GETDATE()
-            ORDER BY EndDate DESC
+            SELECT TOP 1 ISNULL(us.Snapshot_PushTopDaily, sp.Limit_PushTopDaily)
+            FROM UserSubscriptions us
+            LEFT JOIN SubscriptionPlans sp ON us.PlanID = sp.PlanID
+            WHERE us.UserID = @CandidateID 
+              AND us.Status = 1 
+              AND us.EndDate > GETDATE()
+              AND ISNULL(us.SnapshotPlanType, sp.PlanType) <> 'ONE_TIME'
+            ORDER BY us.EndDate DESC
           ) AS VipLimitDaily
         FROM CandidateProfiles cp
         WHERE cp.UserID = @CandidateID
