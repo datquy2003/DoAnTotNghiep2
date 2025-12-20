@@ -162,7 +162,28 @@ router.get("/applied", checkAuth, async (req, res) => {
           j.Status AS JobStatus,
           c.CompanyID,
           c.CompanyName,
-          sp.SpecializationName
+          c.LogoURL AS CompanyLogoURL,
+          c.City AS CompanyCity,
+          sp.SpecializationName,
+          CASE WHEN EXISTS (
+            SELECT TOP 1 1
+            FROM UserSubscriptions us
+            LEFT JOIN SubscriptionPlans sp ON us.PlanID = sp.PlanID
+            WHERE us.UserID = c.OwnerUserID
+              AND us.Status = 1
+              AND us.EndDate > GETDATE()
+              AND ISNULL(us.SnapshotPlanType, sp.PlanType) <> 'ONE_TIME'
+              AND ISNULL(us.Snapshot_PushTopDaily, sp.Limit_PushTopDaily) > 0
+          ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS IsCompanyVip,
+          (
+            SELECT TOP 1 ViewedAt
+            FROM CVViews
+            WHERE ApplicationID = a.ApplicationID
+               OR (ApplicationID IS NULL AND CandidateID = a.CandidateID AND EmployerID = c.OwnerUserID)
+            ORDER BY 
+              CASE WHEN ApplicationID = a.ApplicationID THEN 0 ELSE 1 END,
+              ViewedAt DESC
+          ) AS CvViewedAt
         FROM Applications a
         JOIN Jobs j ON j.JobID = a.JobID
         JOIN Companies c ON c.CompanyID = j.CompanyID
@@ -229,6 +250,7 @@ router.get("/:id/applicants", checkAuth, async (req, res) => {
           a.AppliedAt,
           a.CurrentStatus,
           a.StatusUpdatedAt,
+          cvv.ViewedAt AS CvViewedAt,
           a.CandidateID,
           u.Email AS CandidateEmail,
           cp.FullName,
@@ -239,11 +261,31 @@ router.get("/:id/applicants", checkAuth, async (req, res) => {
           cp.PhoneNumber,
           cv.CVID,
           cv.CVName,
-          cv.CVFileUrl
+          cv.CVFileUrl,
+          CASE WHEN EXISTS (
+            SELECT TOP 1 1
+            FROM UserSubscriptions us
+            LEFT JOIN SubscriptionPlans sp ON us.PlanID = sp.PlanID
+            WHERE us.UserID = a.CandidateID
+              AND us.Status = 1
+              AND us.EndDate > GETDATE()
+              AND ISNULL(us.SnapshotPlanType, sp.PlanType) <> 'ONE_TIME'
+          ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS IsVip
         FROM Applications a
+        JOIN Jobs j ON j.JobID = a.JobID
+        JOIN Companies c ON c.CompanyID = j.CompanyID
         JOIN Users u ON u.FirebaseUserID = a.CandidateID
         LEFT JOIN CandidateProfiles cp ON cp.UserID = a.CandidateID
         LEFT JOIN CVs cv ON cv.CVID = a.CVID
+        OUTER APPLY (
+          SELECT TOP 1 ViewedAt
+          FROM CVViews
+          WHERE ApplicationID = a.ApplicationID
+             OR (ApplicationID IS NULL AND CandidateID = a.CandidateID AND EmployerID = c.OwnerUserID)
+          ORDER BY 
+            CASE WHEN ApplicationID = a.ApplicationID THEN 0 ELSE 1 END,
+            ViewedAt DESC
+        ) cvv
         WHERE a.JobID = @JobID
         ORDER BY a.AppliedAt DESC, a.ApplicationID DESC
       `);
@@ -253,6 +295,7 @@ router.get("/:id/applicants", checkAuth, async (req, res) => {
       appliedAt: row.AppliedAt,
       currentStatus: row.CurrentStatus,
       statusUpdatedAt: row.StatusUpdatedAt,
+      cvViewedAt: row.CvViewedAt,
       candidateId: row.CandidateID,
       candidateEmail: row.CandidateEmail,
       fullName: row.FullName,
@@ -261,6 +304,7 @@ router.get("/:id/applicants", checkAuth, async (req, res) => {
       country: row.Country,
       profileSummary: row.ProfileSummary,
       phoneNumber: row.PhoneNumber || null,
+      isVip: row.IsVip === true || Number(row.IsVip) === 1,
       cv: row.CVID
         ? {
             id: row.CVID,
@@ -306,12 +350,30 @@ router.get("/active", checkAuth, async (req, res) => {
         j.Status,
         c.CompanyID,
         c.CompanyName,
+        c.LogoURL AS CompanyLogoURL,
+        c.Country AS CompanyCountry,
+        c.City AS CompanyCity,
         cat.CategoryName,
         sp.SpecializationName,
         CASE WHEN EXISTS (
           SELECT 1 FROM Applications a
           WHERE a.JobID = j.JobID AND a.CandidateID = @UserID
         ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS HasApplied
+        ,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM SavedJobs sj
+          WHERE sj.JobID = j.JobID AND sj.UserID = @UserID
+        ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS HasSaved,
+        CASE WHEN EXISTS (
+          SELECT TOP 1 1
+          FROM UserSubscriptions us
+          LEFT JOIN SubscriptionPlans sp ON us.PlanID = sp.PlanID
+          WHERE us.UserID = c.OwnerUserID
+            AND us.Status = 1
+            AND us.EndDate > GETDATE()
+            AND ISNULL(us.SnapshotPlanType, sp.PlanType) <> 'ONE_TIME'
+            AND ISNULL(us.Snapshot_PushTopDaily, sp.Limit_PushTopDaily) > 0
+        ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS IsCompanyVip
       FROM Jobs j
       JOIN Companies c ON j.CompanyID = c.CompanyID
       LEFT JOIN Categories cat ON j.CategoryID = cat.CategoryID
@@ -323,6 +385,167 @@ router.get("/active", checkAuth, async (req, res) => {
     return res.status(200).json(result.recordset);
   } catch (error) {
     console.error("Lỗi lấy danh sách job đang tuyển:", error);
+    return res.status(500).json({ message: "Lỗi server." });
+  }
+});
+
+router.get("/saved", checkAuth, async (req, res) => {
+  const userId = req.firebaseUser.uid;
+  try {
+    const pool = await sql.connect(sqlConfig);
+
+    const roleRes = await pool
+      .request()
+      .input("UserID", sql.NVarChar, userId)
+      .query("SELECT TOP 1 RoleID FROM Users WHERE FirebaseUserID = @UserID");
+    const roleId = roleRes.recordset?.[0]?.RoleID ?? null;
+    if (Number(roleId) !== 4) {
+      return res.status(403).json({
+        message: "Chỉ ứng viên mới có thể xem danh sách việc yêu thích.",
+      });
+    }
+
+    const result = await pool.request().input("UserID", sql.NVarChar, userId)
+      .query(`
+        SELECT
+          j.JobID,
+          j.JobTitle,
+          j.CategoryID,
+          j.SpecializationID,
+          j.Location,
+          j.JobType,
+          j.SalaryMin,
+          j.SalaryMax,
+          j.Experience,
+          j.EducationLevel,
+          j.VacancyCount,
+          j.CreatedAt,
+          j.ExpiresAt,
+          j.LastPushedAt,
+          j.Status,
+          c.CompanyID,
+          c.CompanyName,
+          c.LogoURL AS CompanyLogoURL,
+          c.Country AS CompanyCountry,
+          c.City AS CompanyCity,
+          cat.CategoryName,
+          sp.SpecializationName,
+          sj.SavedAt,
+          CAST(1 AS BIT) AS HasSaved,
+          CASE WHEN EXISTS (
+            SELECT 1 FROM Applications a
+            WHERE a.JobID = j.JobID AND a.CandidateID = @UserID
+          ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS HasApplied,
+          CASE WHEN EXISTS (
+            SELECT TOP 1 1
+            FROM UserSubscriptions us
+            LEFT JOIN SubscriptionPlans sp ON us.PlanID = sp.PlanID
+            WHERE us.UserID = c.OwnerUserID
+              AND us.Status = 1
+              AND us.EndDate > GETDATE()
+              AND ISNULL(us.SnapshotPlanType, sp.PlanType) <> 'ONE_TIME'
+              AND ISNULL(us.Snapshot_PushTopDaily, sp.Limit_PushTopDaily) > 0
+          ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS IsCompanyVip
+        FROM SavedJobs sj
+        JOIN Jobs j ON sj.JobID = j.JobID
+        JOIN Companies c ON j.CompanyID = c.CompanyID
+        LEFT JOIN Categories cat ON j.CategoryID = cat.CategoryID
+        LEFT JOIN Specializations sp ON j.SpecializationID = sp.SpecializationID
+        WHERE sj.UserID = @UserID
+        ORDER BY sj.SavedAt DESC
+      `);
+
+    return res.status(200).json(result.recordset || []);
+  } catch (error) {
+    console.error("Lỗi GET /jobs/saved:", error);
+    return res.status(500).json({ message: "Lỗi server." });
+  }
+});
+
+router.post("/:id/save", checkAuth, async (req, res) => {
+  const userId = req.firebaseUser.uid;
+  const jobId = Number(req.params.id);
+
+  if (!jobId || Number.isNaN(jobId)) {
+    return res.status(400).json({ message: "JobID không hợp lệ." });
+  }
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+
+    const roleRes = await pool
+      .request()
+      .input("UserID", sql.NVarChar, userId)
+      .query("SELECT TOP 1 RoleID FROM Users WHERE FirebaseUserID = @UserID");
+    const roleId = roleRes.recordset?.[0]?.RoleID ?? null;
+    if (Number(roleId) !== 4) {
+      return res.status(403).json({
+        message: "Chỉ ứng viên mới có thể yêu thích tin tuyển dụng.",
+      });
+    }
+
+    const jobRes = await pool.request().input("JobID", sql.Int, jobId).query(`
+      SELECT TOP 1 JobID
+      FROM Jobs
+      WHERE JobID = @JobID
+    `);
+    if (!jobRes.recordset?.[0]) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy tin tuyển dụng." });
+    }
+
+    await pool
+      .request()
+      .input("UserID", sql.NVarChar, userId)
+      .input("JobID", sql.Int, jobId).query(`
+        IF NOT EXISTS (
+          SELECT 1 FROM SavedJobs WHERE UserID = @UserID AND JobID = @JobID
+        )
+        BEGIN
+          INSERT INTO SavedJobs(UserID, JobID, SavedAt)
+          VALUES (@UserID, @JobID, GETDATE())
+        END
+      `);
+
+    return res.status(200).json({ message: "Đã thêm vào việc yêu thích." });
+  } catch (error) {
+    console.error("Lỗi POST /jobs/:id/save:", error);
+    return res.status(500).json({ message: "Lỗi server." });
+  }
+});
+
+router.delete("/:id/save", checkAuth, async (req, res) => {
+  const userId = req.firebaseUser.uid;
+  const jobId = Number(req.params.id);
+
+  if (!jobId || Number.isNaN(jobId)) {
+    return res.status(400).json({ message: "JobID không hợp lệ." });
+  }
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+
+    const roleRes = await pool
+      .request()
+      .input("UserID", sql.NVarChar, userId)
+      .query("SELECT TOP 1 RoleID FROM Users WHERE FirebaseUserID = @UserID");
+    const roleId = roleRes.recordset?.[0]?.RoleID ?? null;
+    if (Number(roleId) !== 4) {
+      return res.status(403).json({
+        message: "Chỉ ứng viên mới có thể bỏ yêu thích tin tuyển dụng.",
+      });
+    }
+
+    await pool
+      .request()
+      .input("UserID", sql.NVarChar, userId)
+      .input("JobID", sql.Int, jobId)
+      .query("DELETE FROM SavedJobs WHERE UserID = @UserID AND JobID = @JobID");
+
+    return res.status(200).json({ message: "Đã bỏ yêu thích." });
+  } catch (error) {
+    console.error("Lỗi DELETE /jobs/:id/save:", error);
     return res.status(500).json({ message: "Lỗi server." });
   }
 });
@@ -1778,6 +2001,444 @@ router.get("/push-top-dashboard", checkAuth, async (req, res) => {
     });
   } catch (error) {
     console.error("Lỗi lấy push-top dashboard:", error);
+    return res.status(500).json({ message: "Lỗi server." });
+  }
+});
+
+router.post(
+  "/:id/applicants/:applicationId/view-cv",
+  checkAuth,
+  async (req, res) => {
+    const employerId = req.firebaseUser.uid;
+    const jobId = Number(req.params.id);
+    const applicationId = Number(req.params.applicationId);
+
+    if (!jobId || Number.isNaN(jobId)) {
+      return res.status(400).json({ message: "JobID không hợp lệ." });
+    }
+    if (!applicationId || Number.isNaN(applicationId)) {
+      return res.status(400).json({ message: "ApplicationID không hợp lệ." });
+    }
+
+    try {
+      const pool = await sql.connect(sqlConfig);
+
+      const roleRes = await pool
+        .request()
+        .input("UserID", sql.NVarChar, employerId)
+        .query("SELECT TOP 1 RoleID FROM Users WHERE FirebaseUserID = @UserID");
+      const roleId = roleRes.recordset?.[0]?.RoleID ?? null;
+      if (Number(roleId) !== 3) {
+        return res.status(403).json({
+          message: "Chỉ nhà tuyển dụng mới có thể xem CV ứng viên.",
+        });
+      }
+
+      const checkRes = await pool
+        .request()
+        .input("JobID", sql.Int, jobId)
+        .input("ApplicationID", sql.Int, applicationId)
+        .input("EmployerID", sql.NVarChar, employerId).query(`
+        SELECT TOP 1 a.ApplicationID, a.CurrentStatus, a.CandidateID
+        FROM Applications a
+        JOIN Jobs j ON j.JobID = a.JobID
+        JOIN Companies c ON c.CompanyID = j.CompanyID
+        WHERE a.ApplicationID = @ApplicationID
+          AND a.JobID = @JobID
+          AND c.OwnerUserID = @EmployerID
+      `);
+
+      const application = checkRes.recordset?.[0];
+      if (!application) {
+        return res.status(404).json({
+          message:
+            "Không tìm thấy đơn ứng tuyển hoặc bạn không có quyền truy cập.",
+        });
+      }
+
+      const schemaCheckRes = await pool.request().query(`
+        SELECT CASE WHEN COL_LENGTH('CVViews','ApplicationID') IS NULL THEN 0 ELSE 1 END AS HasApplicationID
+      `);
+      const hasApplicationID =
+        schemaCheckRes.recordset?.[0]?.HasApplicationID === 1;
+
+      if (hasApplicationID) {
+        const existingViewRes = await pool
+          .request()
+          .input("ApplicationID", sql.Int, applicationId).query(`
+            SELECT TOP 1 ViewID, ViewedAt
+            FROM CVViews
+            WHERE ApplicationID = @ApplicationID
+            ORDER BY ViewedAt DESC
+          `);
+
+        if (!existingViewRes.recordset?.[0]) {
+          await pool
+            .request()
+            .input("ApplicationID", sql.Int, applicationId)
+            .input("CandidateID", sql.NVarChar, application.CandidateID)
+            .input("EmployerID", sql.NVarChar, employerId).query(`
+              INSERT INTO CVViews (ApplicationID, CandidateID, EmployerID, ViewedAt)
+              VALUES (@ApplicationID, @CandidateID, @EmployerID, GETDATE())
+            `);
+        }
+      } else {
+        const existingViewRes = await pool
+          .request()
+          .input("CandidateID", sql.NVarChar, application.CandidateID)
+          .input("EmployerID", sql.NVarChar, employerId).query(`
+            SELECT TOP 1 ViewID, ViewedAt
+            FROM CVViews
+            WHERE CandidateID = @CandidateID AND EmployerID = @EmployerID
+            ORDER BY ViewedAt DESC
+          `);
+
+        if (!existingViewRes.recordset?.[0]) {
+          await pool
+            .request()
+            .input("CandidateID", sql.NVarChar, application.CandidateID)
+            .input("EmployerID", sql.NVarChar, employerId).query(`
+              INSERT INTO CVViews (CandidateID, EmployerID, ViewedAt)
+              VALUES (@CandidateID, @EmployerID, GETDATE())
+            `);
+        }
+      }
+
+      if (Number(application.CurrentStatus) === 0) {
+        await pool.request().input("ApplicationID", sql.Int, applicationId)
+          .query(`
+            UPDATE Applications
+            SET CurrentStatus = 1, StatusUpdatedAt = GETDATE()
+            WHERE ApplicationID = @ApplicationID AND CurrentStatus = 0
+            
+            INSERT INTO ApplicationStatusHistory (ApplicationID, Status, ChangedAt)
+            VALUES (@ApplicationID, 1, GETDATE())
+          `);
+      }
+
+      return res.status(200).json({ message: "Đã ghi nhận xem CV." });
+    } catch (error) {
+      console.error(
+        "Lỗi POST /jobs/:id/applicants/:applicationId/view-cv:",
+        error
+      );
+      return res.status(500).json({ message: "Lỗi server." });
+    }
+  }
+);
+
+router.patch(
+  "/:id/applicants/:applicationId/status",
+  checkAuth,
+  async (req, res) => {
+    const employerId = req.firebaseUser.uid;
+    const jobId = Number(req.params.id);
+    const applicationId = Number(req.params.applicationId);
+    const { status } = req.body || {};
+
+    if (!jobId || Number.isNaN(jobId)) {
+      return res.status(400).json({ message: "JobID không hợp lệ." });
+    }
+    if (!applicationId || Number.isNaN(applicationId)) {
+      return res.status(400).json({ message: "ApplicationID không hợp lệ." });
+    }
+    if (status === undefined || status === null) {
+      return res.status(400).json({ message: "Status không hợp lệ." });
+    }
+    const newStatus = Number(status);
+    if (Number.isNaN(newStatus) || ![2, 3].includes(newStatus)) {
+      return res
+        .status(400)
+        .json({ message: "Status phải là 2 (Phù hợp) hoặc 3 (Chưa phù hợp)." });
+    }
+
+    try {
+      const pool = await sql.connect(sqlConfig);
+
+      const roleRes = await pool
+        .request()
+        .input("UserID", sql.NVarChar, employerId)
+        .query("SELECT TOP 1 RoleID FROM Users WHERE FirebaseUserID = @UserID");
+      const roleId = roleRes.recordset?.[0]?.RoleID ?? null;
+      if (Number(roleId) !== 3) {
+        return res.status(403).json({
+          message:
+            "Chỉ nhà tuyển dụng mới có thể cập nhật trạng thái ứng viên.",
+        });
+      }
+
+      const checkRes = await pool
+        .request()
+        .input("JobID", sql.Int, jobId)
+        .input("ApplicationID", sql.Int, applicationId)
+        .input("EmployerID", sql.NVarChar, employerId).query(`
+        SELECT TOP 1 a.ApplicationID, a.CurrentStatus
+        FROM Applications a
+        JOIN Jobs j ON j.JobID = a.JobID
+        JOIN Companies c ON c.CompanyID = j.CompanyID
+        WHERE a.ApplicationID = @ApplicationID
+          AND a.JobID = @JobID
+          AND c.OwnerUserID = @EmployerID
+      `);
+
+      const application = checkRes.recordset?.[0];
+      if (!application) {
+        return res.status(404).json({
+          message:
+            "Không tìm thấy đơn ứng tuyển hoặc bạn không có quyền truy cập.",
+        });
+      }
+
+      if (Number(application.CurrentStatus) < 1) {
+        return res.status(400).json({
+          message: "Vui lòng xem CV trước khi cập nhật trạng thái.",
+        });
+      }
+
+      await pool
+        .request()
+        .input("ApplicationID", sql.Int, applicationId)
+        .input("NewStatus", sql.TinyInt, newStatus).query(`
+        UPDATE Applications
+        SET CurrentStatus = @NewStatus, StatusUpdatedAt = GETDATE()
+        WHERE ApplicationID = @ApplicationID
+        
+        INSERT INTO ApplicationStatusHistory (ApplicationID, Status, ChangedAt)
+        VALUES (@ApplicationID, @NewStatus, GETDATE())
+      `);
+
+      return res.status(200).json({
+        message:
+          newStatus === 2
+            ? "Đã đánh dấu phù hợp."
+            : "Đã đánh dấu chưa phù hợp.",
+      });
+    } catch (error) {
+      console.error(
+        "Lỗi PATCH /jobs/:id/applicants/:applicationId/status:",
+        error
+      );
+      return res.status(500).json({ message: "Lỗi server." });
+    }
+  }
+);
+
+router.get("/:id", checkAuth, async (req, res) => {
+  const { id } = req.params;
+  const userId = req.firebaseUser?.uid;
+
+  if (!id || Number.isNaN(Number(id))) {
+    return res.status(400).json({ message: "JobID không hợp lệ." });
+  }
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+
+    const schemaRes = await pool.request().query(`
+      SELECT 
+        CASE WHEN COL_LENGTH('JobWorkingShifts','ShiftGroupID') IS NULL THEN 0 ELSE 1 END AS HasShiftGroup,
+        CASE WHEN COL_LENGTH('JobWorkingShifts','RangeDayFrom') IS NULL THEN 0 ELSE 1 END AS HasRangeDayFrom,
+        CASE WHEN COL_LENGTH('JobWorkingShifts','RangeDayTo') IS NULL THEN 0 ELSE 1 END AS HasRangeDayTo
+    `);
+
+    const hasShiftGroup = schemaRes.recordset?.[0]?.HasShiftGroup === 1;
+    const hasRangeDayFrom = schemaRes.recordset?.[0]?.HasRangeDayFrom === 1;
+    const hasRangeDayTo = schemaRes.recordset?.[0]?.HasRangeDayTo === 1;
+
+    const workingTimesSubquery =
+      hasShiftGroup && hasRangeDayFrom && hasRangeDayTo
+        ? `(
+            SELECT
+              ISNULL(CONVERT(varchar(36), s.ShiftGroupID), CONCAT('legacy-', s.ShiftID)) AS id,
+              CASE COALESCE(s.RangeDayFrom, s.DayOfWeek)
+                WHEN 1 THEN N'Thứ 2'
+                WHEN 2 THEN N'Thứ 3'
+                WHEN 3 THEN N'Thứ 4'
+                WHEN 4 THEN N'Thứ 5'
+                WHEN 5 THEN N'Thứ 6'
+                WHEN 6 THEN N'Thứ 7'
+                WHEN 7 THEN N'Chủ nhật'
+              END AS dayFrom,
+              CASE COALESCE(s.RangeDayTo, s.DayOfWeek)
+                WHEN 1 THEN N'Thứ 2'
+                WHEN 2 THEN N'Thứ 3'
+                WHEN 3 THEN N'Thứ 4'
+                WHEN 4 THEN N'Thứ 5'
+                WHEN 5 THEN N'Thứ 6'
+                WHEN 6 THEN N'Thứ 7'
+                WHEN 7 THEN N'Chủ nhật'
+              END AS dayTo,
+              LEFT(CONVERT(varchar(8), MIN(s.TimeFrom), 108), 5) AS timeFrom,
+              LEFT(CONVERT(varchar(8), MIN(s.TimeTo), 108), 5) AS timeTo
+            FROM JobWorkingShifts s
+            WHERE s.JobID = j.JobID
+            GROUP BY
+              ISNULL(CONVERT(varchar(36), s.ShiftGroupID), CONCAT('legacy-', s.ShiftID)),
+              COALESCE(s.RangeDayFrom, s.DayOfWeek),
+              COALESCE(s.RangeDayTo, s.DayOfWeek),
+              s.TimeFrom,
+              s.TimeTo
+            ORDER BY MIN(s.ShiftID) ASC
+            FOR JSON PATH
+          )`
+        : `(
+            SELECT
+              CASE s.DayOfWeek
+                WHEN 1 THEN N'Thứ 2'
+                WHEN 2 THEN N'Thứ 3'
+                WHEN 3 THEN N'Thứ 4'
+                WHEN 4 THEN N'Thứ 5'
+                WHEN 5 THEN N'Thứ 6'
+                WHEN 6 THEN N'Thứ 7'
+                WHEN 7 THEN N'Chủ nhật'
+              END AS dayFrom,
+              CASE s.DayOfWeek
+                WHEN 1 THEN N'Thứ 2'
+                WHEN 2 THEN N'Thứ 3'
+                WHEN 3 THEN N'Thứ 4'
+                WHEN 4 THEN N'Thứ 5'
+                WHEN 5 THEN N'Thứ 6'
+                WHEN 6 THEN N'Thứ 7'
+                WHEN 7 THEN N'Chủ nhật'
+              END AS dayTo,
+              LEFT(CONVERT(varchar(8), s.TimeFrom, 108), 5) AS timeFrom,
+              LEFT(CONVERT(varchar(8), s.TimeTo, 108), 5) AS timeTo
+            FROM JobWorkingShifts s
+            WHERE s.JobID = j.JobID
+            ORDER BY s.DayOfWeek ASC, s.TimeFrom ASC
+            FOR JSON PATH
+          )`;
+
+    const result = await pool
+      .request()
+      .input("JobID", sql.Int, Number(id))
+      .input("UserID", sql.NVarChar, userId || "").query(`
+        SELECT
+          j.JobID,
+          j.JobTitle,
+          j.JobDescription,
+          j.Requirements,
+          j.Benefits,
+          j.Location,
+          j.JobType,
+          j.SalaryMin,
+          j.SalaryMax,
+          j.Experience,
+          j.EducationLevel,
+          j.VacancyCount,
+          j.CreatedAt,
+          j.ExpiresAt,
+          j.LastPushedAt,
+          j.Status,
+          c.CompanyID,
+          c.CompanyName,
+          c.LogoURL AS CompanyLogoURL,
+          c.Address AS CompanyAddress,
+          c.City AS CompanyCity,
+          c.Country AS CompanyCountry,
+          cat.CategoryName,
+          sp.SpecializationName,
+          CASE WHEN EXISTS (
+            SELECT 1 FROM Applications a
+            WHERE a.JobID = j.JobID AND a.CandidateID = @UserID
+          ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS HasApplied,
+          CASE WHEN EXISTS (
+            SELECT 1 FROM SavedJobs sj
+            WHERE sj.JobID = j.JobID AND sj.UserID = @UserID
+          ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS HasSaved,
+          CASE WHEN EXISTS (
+            SELECT TOP 1 1
+            FROM UserSubscriptions us
+            LEFT JOIN SubscriptionPlans sp ON us.PlanID = sp.PlanID
+            WHERE us.UserID = c.OwnerUserID
+              AND us.Status = 1
+              AND us.EndDate > GETDATE()
+              AND ISNULL(us.SnapshotPlanType, sp.PlanType) <> 'ONE_TIME'
+              AND ISNULL(us.Snapshot_PushTopDaily, sp.Limit_PushTopDaily) > 0
+          ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS IsCompanyVip,
+          (SELECT COUNT(*) FROM Applications a WHERE a.JobID = j.JobID) AS ApplicantCount,
+          ${workingTimesSubquery} AS WorkingTimes
+        FROM Jobs j
+        JOIN Companies c ON j.CompanyID = c.CompanyID
+        LEFT JOIN Categories cat ON j.CategoryID = cat.CategoryID
+        LEFT JOIN Specializations sp ON j.SpecializationID = sp.SpecializationID
+        WHERE j.JobID = @JobID
+      `);
+
+    const job = result.recordset?.[0];
+    if (!job) {
+      return res.status(404).json({ message: "Không tìm thấy công việc." });
+    }
+
+    let workingTimes = [];
+    if (job.WorkingTimes) {
+      try {
+        workingTimes = JSON.parse(job.WorkingTimes);
+      } catch (e) {
+        workingTimes = [];
+      }
+    }
+
+    let requirements = [];
+    if (job.Requirements) {
+      try {
+        const parsed = JSON.parse(job.Requirements);
+        requirements = Array.isArray(parsed) ? parsed : [job.Requirements];
+      } catch (e) {
+        requirements = job.Requirements.split(/\r?\n/).filter((r) => r.trim());
+      }
+    }
+
+    let benefits = [];
+    if (job.Benefits) {
+      try {
+        const parsed = JSON.parse(job.Benefits);
+        benefits = Array.isArray(parsed) ? parsed : [job.Benefits];
+      } catch (e) {
+        benefits = job.Benefits.split(/\r?\n/).filter((b) => b.trim());
+      }
+    }
+
+    let jobDescription = [];
+    if (job.JobDescription) {
+      try {
+        const parsed = JSON.parse(job.JobDescription);
+        jobDescription = Array.isArray(parsed) ? parsed : [job.JobDescription];
+      } catch (e) {
+        jobDescription = job.JobDescription.split(/\r?\n/).filter((d) =>
+          d.trim()
+        );
+      }
+    }
+
+    let candidateRequirements = [];
+    let canViewApplicantCount = false;
+    if (userId) {
+      const vipRes = await pool.request().input("UserID", sql.NVarChar, userId)
+        .query(`
+          SELECT TOP 1 1
+          FROM UserSubscriptions us
+          LEFT JOIN SubscriptionPlans sp ON us.PlanID = sp.PlanID
+          WHERE us.UserID = @UserID
+            AND us.Status = 1
+            AND us.EndDate > GETDATE()
+            AND ISNULL(us.SnapshotPlanType, sp.PlanType) <> 'ONE_TIME'
+        `);
+      canViewApplicantCount = vipRes.recordset?.length > 0;
+    }
+
+    return res.status(200).json({
+      ...job,
+      WorkingTimes: workingTimes,
+      Requirements: requirements,
+      Benefits: benefits,
+      JobDescription: jobDescription,
+      CandidateRequirements: candidateRequirements,
+      CanViewApplicantCount: canViewApplicantCount,
+      ApplicantCount: canViewApplicantCount ? job.ApplicantCount : null,
+    });
+  } catch (error) {
+    console.error("Lỗi GET /jobs/:id:", error);
     return res.status(500).json({ message: "Lỗi server." });
   }
 });

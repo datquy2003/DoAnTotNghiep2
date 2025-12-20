@@ -64,10 +64,7 @@ CREATE TABLE Specializations (
     CategoryID int NOT NULL,
     SpecializationName nvarchar(100) NOT NULL,
     
-    CONSTRAINT FK_Specializations_Categories 
-        FOREIGN KEY (CategoryID) 
-        REFERENCES Categories(CategoryID) 
-        ON DELETE CASCADE
+    CONSTRAINT FK_Specializations_Categories FOREIGN KEY (CategoryID) REFERENCES Categories(CategoryID) ON DELETE CASCADE
 );
 GO
 
@@ -212,10 +209,7 @@ CREATE TABLE ApplicationStatusHistory (
     
     ChangedAt datetime DEFAULT GETDATE(),
     
-    CONSTRAINT FK_ApplicationStatusHistory_Applications 
-        FOREIGN KEY (ApplicationID) 
-        REFERENCES Applications(ApplicationID) 
-        ON DELETE CASCADE
+    CONSTRAINT FK_ApplicationStatusHistory_Applications FOREIGN KEY (ApplicationID) REFERENCES Applications(ApplicationID) ON DELETE CASCADE
 );
 GO
 
@@ -313,10 +307,12 @@ GO
 -- Bảng 18: CVViews (Log NTD xem CV)
 CREATE TABLE CVViews (
     ViewID int IDENTITY(1,1) PRIMARY KEY,
+    ApplicationID int NULL,
     CandidateID nvarchar(128) NOT NULL,
     EmployerID nvarchar(128) NOT NULL, 
     ViewedAt datetime DEFAULT GETDATE(),
     
+    CONSTRAINT FK_CVViews_Applications FOREIGN KEY (ApplicationID) REFERENCES Applications(ApplicationID) ON DELETE CASCADE,
     CONSTRAINT FK_CVViews_Candidate FOREIGN KEY (CandidateID) REFERENCES Users(FirebaseUserID),
     CONSTRAINT FK_CVViews_Employer FOREIGN KEY (EmployerID) REFERENCES Users(FirebaseUserID)
 );

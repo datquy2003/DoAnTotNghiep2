@@ -3,15 +3,18 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./context/AuthContext";
 import "leaflet/dist/leaflet.css";
 
+import MainLayout from "./components/MainLayout";
+
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ChooseRole from "./pages/ChooseRole";
 import ForgotPassword from "./pages/ForgotPassword";
-import MainLayout from "./components/MainLayout";
 import ProfileEdit from "./pages/ProfileEdit";
 import VerifyEmail from "./pages/VerifyEmail";
 import ChangePassword from "./pages/ChangePassword";
-import CvManagement from "./pages/candidate/CvManagement";
+import PaymentResult from "./pages/PaymentResult";
+import HomeJobs from "./pages/HomeJobs";
+import JobDetail from "./pages/JobDetail";
 
 import AdminLayout from "./pages/admin/AdminLayout";
 import UserManagement from "./pages/admin/UserManagement";
@@ -25,15 +28,15 @@ import RevenueStats from "./pages/admin/reports/RevenueStats";
 import NewUsersStats from "./pages/admin/reports/NewUsersStats";
 import NewPostsStats from "./pages/admin/reports/NewPostsStats";
 
-import CandidateSubscription from "./pages/candidate/CandidateSubscription";
 import EmployerSubscription from "./pages/employer/EmployerSubscription";
-import PaymentResult from "./pages/PaymentResult";
 import ApplicantManagement from "./pages/employer/ApplicantManagement";
 import JobPostsManagement from "./pages/employer/JobPostsManagement";
-import HomeJobs from "./pages/HomeJobs";
-import AppliedJobs from "./pages/candidate/AppliedJobs";
 
-const FavoriteJobs = () => <div>Trang Việc yêu thích</div>;
+import CvManagement from "./pages/candidate/CvManagement";
+import AppliedJobs from "./pages/candidate/AppliedJobs";
+import FavoriteJobs from "./pages/candidate/FavoriteJobs";
+import CandidateSubscription from "./pages/candidate/CandidateSubscription";
+
 const BlockedCompanies = () => <div>Trang Công ty đã chặn</div>;
 
 const Messages = () => <div>Trang Nhắn tin</div>;
@@ -104,6 +107,7 @@ function App() {
         }
       >
         <Route index element={<RoleBasedHome />} />
+        <Route path="jobs/:id" element={<JobDetail />} />
         <Route path="messages" element={<Messages />} />
         <Route path="profile-edit" element={<ProfileEdit />} />
         <Route path="change-password" element={<ChangePassword />} />

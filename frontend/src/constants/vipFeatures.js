@@ -33,6 +33,7 @@ const ONE_TIME_FEATURES = {
 const buildFixedFeatureText = (roleId, limits) => {
   const lines = ["Huy hiệu xác thực tài khoản."];
   if (roleId === 3) {
+    lines.push(`Bài viết tuyển dụng lấp lánh nổi bật.`);
     if (limits.Limit_JobPostDaily) {
       lines.push(
         `Giới hạn số lượng bài đăng 1 ngày: ${limits.Limit_JobPostDaily} bài viết.`

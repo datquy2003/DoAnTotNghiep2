@@ -219,6 +219,68 @@ router.post("/verify-payment", checkAuth, async (req, res) => {
             VALUES (@UserID, @Message, @LinkURL, @Type, @ReferenceID)
           `
           );
+
+        const metadata = session.metadata || {};
+        const featureKey = metadata.featureKey;
+        const referenceId = metadata.jobId || metadata.candidateId || null;
+
+        if (featureKey && referenceId && subscriptionId) {
+          const existingUsage = await transaction
+            .request()
+            .input("UserID", sql.NVarChar, userId)
+            .input("FeatureType", sql.NVarChar, featureKey)
+            .input("ReferenceID", sql.NVarChar, referenceId).query(`
+              SELECT TOP 1 UsageID
+              FROM VipOneTimeUsage
+              WHERE UserID = @UserID
+                AND FeatureType = @FeatureType
+                AND ReferenceID = @ReferenceID
+            `);
+
+          if (!existingUsage.recordset?.[0]) {
+            await transaction
+              .request()
+              .input("UserID", sql.NVarChar, userId)
+              .input("FeatureType", sql.NVarChar, featureKey)
+              .input("ReferenceID", sql.NVarChar, referenceId)
+              .input("SubscriptionID", sql.Int, subscriptionId).query(`
+                INSERT INTO VipOneTimeUsage (UserID, FeatureType, ReferenceID, SubscriptionID, UsedAt)
+                VALUES (@UserID, @FeatureType, @ReferenceID, @SubscriptionID, GETDATE())
+              `);
+
+            if (
+              featureKey === "CANDIDATE_COMPETITOR_INSIGHT" &&
+              metadata.jobId
+            ) {
+              let jobTitle = metadata.jobTitle || "";
+
+              if (!jobTitle) {
+                const jobResult = await transaction
+                  .request()
+                  .input("JobID", sql.Int, parseInt(metadata.jobId))
+                  .query(
+                    `SELECT TOP 1 JobTitle FROM Jobs WHERE JobID = @JobID`
+                  );
+                jobTitle = jobResult.recordset[0]?.JobTitle || "công việc";
+              }
+
+              const money = formatCurrencyVN(plan.Price) + "₫";
+              const message = `Bạn đã trả ${money} để xem danh sách ứng viên đã ứng tuyển vào công việc "${jobTitle}".`;
+              const linkUrl = `/jobs/${metadata.jobId}`;
+
+              await transaction
+                .request()
+                .input("UserID", sql.NVarChar, userId)
+                .input("Message", sql.NVarChar, message)
+                .input("LinkURL", sql.NVarChar, linkUrl)
+                .input("Type", sql.NVarChar, NOTIF_TYPE_ONE_TIME)
+                .input("ReferenceID", sql.NVarChar, metadata.jobId).query(`
+                  INSERT INTO Notifications (UserID, Message, LinkURL, Type, ReferenceID)
+                  VALUES (@UserID, @Message, @LinkURL, @Type, @ReferenceID)
+                `);
+            }
+          }
+        }
       }
 
       if (plan.RoleID === 4) {

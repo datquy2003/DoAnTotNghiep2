@@ -53,7 +53,7 @@ const TooltipCount = ({ active, payload, label }) => {
   const val = payload[0]?.value ?? 0;
   const fullLabel = payload?.[0]?.payload?.labelFull || label;
   return (
-    <div className="px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg shadow-sm">
+    <div className="bg-white border border-gray-200 shadow-sm rounded-lg px-3 py-2 text-sm">
       <div className="font-semibold text-gray-900">{fullLabel}</div>
       <div className="text-gray-700">Người dùng mới: {val}</div>
     </div>
@@ -149,8 +149,8 @@ function NewUsersStatsInner() {
     <div className="w-full">
       <div className="text-2xl font-bold text-gray-900">Người dùng mới</div>
 
-      <div className="p-4 mt-6 bg-white border border-gray-100 shadow-sm rounded-xl">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             {RANGE_OPTIONS.map((opt) => (
               <button
@@ -175,7 +175,7 @@ function NewUsersStatsInner() {
                 <select
                   value={year}
                   onChange={(e) => setYear(Number(e.target.value))}
-                  className="px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg"
+                  className="border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white"
                 >
                   {Array.from({ length: 6 }, (_, i) => {
                     const y = new Date().getFullYear() - i;
@@ -193,7 +193,7 @@ function NewUsersStatsInner() {
               type="button"
               onClick={() => load(true)}
               disabled={loading || refreshing}
-              className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-60"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-60"
             >
               <FiRefreshCw
                 className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
@@ -203,14 +203,14 @@ function NewUsersStatsInner() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 mt-4 md:grid-cols-2">
-          <div className="p-4 border border-gray-100 rounded-xl bg-gray-50">
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
             <div className="text-sm text-gray-600">Tổng người dùng mới</div>
             <div className="mt-1 text-2xl font-bold text-gray-900">
               {loading ? "…" : Number(data?.totalNewUsers || 0)}
             </div>
           </div>
-          <div className="p-4 border border-gray-100 rounded-xl bg-gray-50">
+          <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
             <div className="text-sm text-gray-600">Khoảng thời gian</div>
             <div className="mt-1 text-sm font-semibold text-gray-900">
               {rangeLabel}
@@ -219,8 +219,8 @@ function NewUsersStatsInner() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 mt-6 lg:grid-cols-2">
-        <div className="p-4 bg-white border border-gray-100 shadow-sm rounded-xl lg:order-2">
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:order-2">
           <div className="text-lg font-bold text-gray-900">
             Người dùng mới theo thời gian
           </div>
@@ -228,7 +228,7 @@ function NewUsersStatsInner() {
 
           <div className="mt-4 h-[360px]">
             {loading ? (
-              <div className="flex items-center justify-center h-full text-gray-600">
+              <div className="h-full flex items-center justify-center text-gray-600">
                 Đang tải biểu đồ...
               </div>
             ) : (
@@ -249,7 +249,7 @@ function NewUsersStatsInner() {
           </div>
         </div>
 
-        <div className="p-4 bg-white border border-gray-100 shadow-sm rounded-xl lg:order-1">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 lg:order-1">
           <div className="text-lg font-bold text-gray-900">
             Cơ cấu người dùng mới
           </div>
@@ -259,11 +259,11 @@ function NewUsersStatsInner() {
 
           <div className="mt-4 h-[360px]">
             {loading ? (
-              <div className="flex items-center justify-center h-full text-gray-600">
+              <div className="h-full flex items-center justify-center text-gray-600">
                 Đang tải biểu đồ...
               </div>
             ) : pieData.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-gray-600">
+              <div className="h-full flex items-center justify-center text-gray-600">
                 Không có dữ liệu trong khoảng thời gian này.
               </div>
             ) : (

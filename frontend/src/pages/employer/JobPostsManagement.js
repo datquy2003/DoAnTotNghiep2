@@ -10,6 +10,8 @@ import {
   FiXCircle,
   FiRotateCcw,
   FiMessageSquare,
+  FiChevronLeft,
+  FiChevronRight,
 } from "react-icons/fi";
 import toast from "react-hot-toast";
 import { jobApi } from "../../api/jobApi";
@@ -45,6 +47,8 @@ const JobPostsManagement = () => {
   const [specializations, setSpecializations] = useState([]);
   const [pushingId, setPushingId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const PAGE_SIZE = 10;
+  const [page, setPage] = useState(1);
 
   const [searchTitle, setSearchTitle] = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL");
@@ -89,7 +93,7 @@ const JobPostsManagement = () => {
   const filteredJobs = useMemo(() => {
     const keyword = normalizeText(searchTitle);
 
-    return (jobs || []).filter((job) => {
+    const filtered = (jobs || []).filter((job) => {
       if (keyword) {
         const t = normalizeText(job?.JobTitle);
         if (!t.includes(keyword)) return false;
@@ -110,7 +114,59 @@ const JobPostsManagement = () => {
 
       return true;
     });
+
+    const now = Date.now();
+    const toTime = (v) => {
+      const t = new Date(v).getTime();
+      return Number.isNaN(t) ? Infinity : t;
+    };
+
+    return [...filtered].sort((a, b) => {
+      const expiresA = toTime(a?.ExpiresAt);
+      const expiresB = toTime(b?.ExpiresAt);
+
+      const isExpiredA = expiresA < now;
+      const isExpiredB = expiresB < now;
+
+      if (isExpiredA && !isExpiredB) return 1;
+      if (!isExpiredA && isExpiredB) return -1;
+
+      if (!isExpiredA && !isExpiredB) {
+        return expiresA - expiresB;
+      }
+
+      return expiresB - expiresA;
+    });
   }, [jobs, searchTitle, filterStatus, filterSpecId, filterExperience]);
+
+  const totalPages = useMemo(() => {
+    const n = Math.ceil((filteredJobs?.length || 0) / PAGE_SIZE);
+    return Math.max(1, n);
+  }, [filteredJobs, PAGE_SIZE]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [totalPages]);
+
+  const paged = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return (filteredJobs || []).slice(start, start + PAGE_SIZE);
+  }, [filteredJobs, page, PAGE_SIZE]);
+
+  const pageItems = useMemo(() => {
+    const tp = totalPages;
+    if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
+    const items = new Set([1, tp, page - 1, page, page + 1]);
+    const arr = Array.from(items)
+      .filter((x) => x >= 1 && x <= tp)
+      .sort((a, b) => a - b);
+    const out = [];
+    for (let i = 0; i < arr.length; i++) {
+      out.push(arr[i]);
+      if (i < arr.length - 1 && arr[i + 1] - arr[i] > 1) out.push("…");
+    }
+    return out;
+  }, [page, totalPages]);
 
   const experienceOptions = useMemo(() => {
     return Object.entries(EXPERIENCE_AMOUNT)
@@ -149,6 +205,10 @@ const JobPostsManagement = () => {
     return () => document.removeEventListener("mousedown", onDocMouseDown);
   }, [specDropdownOpen]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [searchTitle, filterStatus, filterSpecId, filterExperience]);
+
   const loadPushTopDashboard = async () => {
     setDashboardLoading(true);
     try {
@@ -171,22 +231,7 @@ const JobPostsManagement = () => {
         : Array.isArray(res)
         ? res
         : [];
-      const toTime = (v) => {
-        const t = new Date(v).getTime();
-        return Number.isNaN(t) ? 0 : t;
-      };
-      const activityTime = (job) => {
-        const approvedAt = toTime(job?.ApprovedAt);
-        const lastPushedAt = toTime(job?.LastPushedAt);
-        const createdAt = toTime(job?.CreatedAt);
-        return Math.max(approvedAt, lastPushedAt, createdAt);
-      };
-      const sorted = [...list].sort((a, b) => {
-        const diff = activityTime(b) - activityTime(a);
-        if (diff !== 0) return diff;
-        return toTime(b?.CreatedAt) - toTime(a?.CreatedAt);
-      });
-      setJobs(sorted);
+      setJobs(list);
     } catch (error) {
       console.error("Lỗi lấy danh sách bài đăng:", error);
       const message =
@@ -407,8 +452,8 @@ const JobPostsManagement = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh] text-gray-600">
-        <div className="flex items-center gap-3 px-4 py-3 bg-white border border-gray-100 shadow-sm rounded-xl">
-          <FiRefreshCw className="w-5 h-5 text-blue-600 animate-spin" />
+        <div className="flex items-center gap-3 bg-white px-4 py-3 rounded-xl shadow-sm border border-gray-100">
+          <FiRefreshCw className="animate-spin h-5 w-5 text-blue-600" />
           <span>Đang tải danh sách bài đăng...</span>
         </div>
       </div>
@@ -416,14 +461,14 @@ const JobPostsManagement = () => {
   }
 
   return (
-    <div className="w-full px-4 py-8 lg:px-0">
+    <div className="w-full py-8 px-4 lg:px-0">
       <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)_320px] gap-4 xl:gap-6">
         <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="p-4 bg-white border border-gray-100 shadow-sm rounded-xl">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             <div className="text-sm font-semibold text-gray-900">
               Một số quy tắc với các nút bấm
             </div>
-            <ul className="pl-5 mt-3 space-y-2 text-sm text-gray-700 list-disc">
+            <ul className="mt-3 space-y-2 text-sm text-gray-700 list-disc pl-5">
               {GUIDE_ITEMS.map((item, idx) => (
                 <li key={idx}>{item}</li>
               ))}
@@ -473,7 +518,7 @@ const JobPostsManagement = () => {
                         loadPushTopDashboard();
                       }}
                       disabled={refreshing}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-60"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-60"
                     >
                       <FiRefreshCw
                         className={`h-4 w-4 ${
@@ -488,9 +533,9 @@ const JobPostsManagement = () => {
                         setAddModalOpen(true);
                       }}
                       disabled={isPostQuotaExceeded}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg shadow-sm hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
                     >
-                      <FiPlus className="w-4 h-4" />
+                      <FiPlus className="h-4 w-4" />
                       <span>Thêm mới</span>
                     </button>
                   </div>
@@ -504,28 +549,28 @@ const JobPostsManagement = () => {
             })()}
           </div>
 
-          <div className="p-4 mb-4 bg-white border border-gray-100 shadow-sm rounded-xl">
+          <div className="mb-4 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
                 <div className="flex-1">
-                  <div className="mb-1 text-xs font-semibold text-gray-600">
+                  <div className="text-xs font-semibold text-gray-600 mb-1">
                     Tìm theo tiêu đề
                   </div>
                   <input
                     value={searchTitle}
                     onChange={(e) => setSearchTitle(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
                 <div className="min-w-[180px]">
-                  <div className="mb-1 text-xs font-semibold text-gray-600">
+                  <div className="text-xs font-semibold text-gray-600 mb-1">
                     Trạng thái
                   </div>
                   <select
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
                   >
                     <option value="ALL">Tất cả</option>
                     {Object.entries(STATUS_CONFIG).map(([k, v]) => (
@@ -537,7 +582,7 @@ const JobPostsManagement = () => {
                 </div>
 
                 <div className="min-w-[220px]">
-                  <div className="mb-1 text-xs font-semibold text-gray-600">
+                  <div className="text-xs font-semibold text-gray-600 mb-1">
                     Chuyên môn
                   </div>
                   <div className="relative" ref={specDropdownRef}>
@@ -550,7 +595,7 @@ const JobPostsManagement = () => {
                         }}
                         onFocus={() => setSpecDropdownOpen(true)}
                         placeholder={selectedSpecLabel}
-                        className="w-full px-3 py-2 pr-12 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-12 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                       {specSearch ? (
                         <button
@@ -561,7 +606,7 @@ const JobPostsManagement = () => {
                             setFilterSpecId("ALL");
                             setSpecDropdownOpen(false);
                           }}
-                          className="absolute text-gray-400 -translate-y-1/2 right-8 top-1/2 hover:text-gray-700"
+                          className="absolute right-8 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
                         >
                           ×
                         </button>
@@ -569,7 +614,7 @@ const JobPostsManagement = () => {
                       <button
                         type="button"
                         onClick={() => setSpecDropdownOpen((v) => !v)}
-                        className="absolute text-gray-400 -translate-y-1/2 right-3 top-1/2 hover:text-gray-700"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
                         aria-label="Mở danh sách chuyên môn"
                       >
                         ▾
@@ -577,8 +622,8 @@ const JobPostsManagement = () => {
                     </div>
 
                     {specDropdownOpen ? (
-                      <div className="absolute z-20 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg">
-                        <div className="py-1 overflow-auto max-h-64">
+                      <div className="absolute z-20 mt-2 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
+                        <div className="max-h-64 overflow-auto py-1">
                           <button
                             type="button"
                             onClick={() => {
@@ -630,13 +675,13 @@ const JobPostsManagement = () => {
                 </div>
 
                 <div className="min-w-[200px]">
-                  <div className="mb-1 text-xs font-semibold text-gray-600">
+                  <div className="text-xs font-semibold text-gray-600 mb-1">
                     Kinh nghiệm
                   </div>
                   <select
                     value={filterExperience}
                     onChange={(e) => setFilterExperience(e.target.value)}
-                    className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white"
                   >
                     <option value="ALL">Tất cả</option>
                     {experienceOptions.map((x) => (
@@ -667,7 +712,7 @@ const JobPostsManagement = () => {
                       setSpecSearch("");
                       setSpecDropdownOpen(false);
                     }}
-                    className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+                    className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-700 bg-white hover:bg-gray-50"
                   >
                     Xóa lọc
                   </button>
@@ -676,33 +721,33 @@ const JobPostsManagement = () => {
             </div>
           </div>
 
-          <div className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-xl">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Tiêu đề
                     </th>
-                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Mức lương
                     </th>
-                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Kinh nghiệm
                     </th>
-                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Chuyên môn
                     </th>
-                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Ngày tạo
                     </th>
-                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Ngày hết hạn
                     </th>
-                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Trạng thái
                     </th>
-                    <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Hành động
                     </th>
                   </tr>
@@ -712,13 +757,13 @@ const JobPostsManagement = () => {
                     <tr>
                       <td
                         colSpan={8}
-                        className="px-4 py-10 text-sm text-center text-gray-500"
+                        className="px-4 py-10 text-center text-gray-500 text-sm"
                       >
                         Không có kết quả phù hợp.
                       </td>
                     </tr>
                   ) : (
-                    filteredJobs.map((job) => (
+                    paged.map((job) => (
                       <tr key={job.JobID} className="hover:bg-gray-50">
                         <td className="px-4 py-3 text-sm font-semibold text-gray-900">
                           {job.JobTitle}
@@ -762,7 +807,7 @@ const JobPostsManagement = () => {
                               onClick={() => setDetailJob(job)}
                               className="text-blue-600 hover:text-blue-900"
                             >
-                              <FiInfo className="w-4 h-4" />
+                              <FiInfo className="h-4 w-4" />
                             </button>
                             <button
                               title="Sửa"
@@ -774,7 +819,7 @@ const JobPostsManagement = () => {
                                   : ""
                               }`}
                             >
-                              <FiEdit2 className="w-4 h-4" />
+                              <FiEdit2 className="h-4 w-4" />
                             </button>
                             {Number(job.Status) === 4 ? (
                               <>
@@ -783,7 +828,7 @@ const JobPostsManagement = () => {
                                   onClick={() => openResubmitModal(job)}
                                   className="text-amber-700 hover:text-amber-900"
                                 >
-                                  <FiMessageSquare className="w-4 h-4" />
+                                  <FiMessageSquare className="h-4 w-4" />
                                 </button>
                               </>
                             ) : null}
@@ -838,7 +883,7 @@ const JobPostsManagement = () => {
                                   : ""
                               }`}
                             >
-                              <FiUsers className="w-4 h-4" />
+                              <FiUsers className="h-4 w-4" />
                             </button>
                             <button
                               title="Đóng bài tuyển dụng"
@@ -850,7 +895,7 @@ const JobPostsManagement = () => {
                                   : ""
                               }`}
                             >
-                              <FiXCircle className="w-4 h-4" />
+                              <FiXCircle className="h-4 w-4" />
                             </button>
                             <button
                               title="Mở lại bài tuyển dụng"
@@ -862,7 +907,7 @@ const JobPostsManagement = () => {
                                   : ""
                               }`}
                             >
-                              <FiRotateCcw className="w-4 h-4" />
+                              <FiRotateCcw className="h-4 w-4" />
                             </button>
                             <button
                               title="Xóa"
@@ -878,7 +923,7 @@ const JobPostsManagement = () => {
                                   : ""
                               }`}
                             >
-                              <FiTrash2 className="w-4 h-4" />
+                              <FiTrash2 className="h-4 w-4" />
                             </button>
                           </div>
                         </td>
@@ -888,18 +933,83 @@ const JobPostsManagement = () => {
                 </tbody>
               </table>
             </div>
+
+            {filteredJobs.length > 0 && (
+              <div className="m-4 flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  Hiển thị{" "}
+                  <span className="font-semibold text-gray-900">
+                    {(page - 1) * PAGE_SIZE + 1}
+                  </span>
+                  {" - "}
+                  <span className="font-semibold text-gray-900">
+                    {Math.min(page * PAGE_SIZE, filteredJobs.length)}
+                  </span>{" "}
+                  /{" "}
+                  <span className="font-semibold text-gray-900">
+                    {filteredJobs.length}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    <FiChevronLeft className="h-4 w-4" />
+                  </button>
+
+                  <div className="flex items-center gap-1 flex-wrap justify-center">
+                    {pageItems.map((it, idx) =>
+                      it === "…" ? (
+                        <span
+                          key={`dots-${idx}`}
+                          className="px-2 text-gray-500"
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={`p-${it}`}
+                          type="button"
+                          onClick={() => setPage(Number(it))}
+                          className={`min-w-9 px-3 py-2 rounded-lg border text-sm ${
+                            Number(it) === page
+                              ? "border-blue-200 bg-blue-50 text-blue-700 font-semibold"
+                              : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          {it}
+                        </button>
+                      )
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    <FiChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </main>
 
         <aside className="lg:sticky lg:top-6 lg:self-start">
-          <div className="p-4 bg-white border border-gray-100 shadow-sm rounded-xl">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold text-gray-900">
                 Quản lý đẩy top
               </div>
             </div>
 
-            <div className="p-3 mt-3 border border-gray-100 rounded-lg bg-gray-50">
+            <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
               {pushTopDashboard ? (
                 <div className="space-y-2 text-sm text-gray-800">
                   <div className="flex items-center justify-between">
@@ -979,7 +1089,7 @@ const JobPostsManagement = () => {
                   pushTopDashboard.recent.map((j) => (
                     <div
                       key={j.LogID ?? `${j.JobID}-${j.LastPushedAt}`}
-                      className="p-3 border border-gray-100 rounded-lg"
+                      className="rounded-lg border border-gray-100 p-3"
                     >
                       <div className="text-sm font-semibold text-gray-900 line-clamp-2">
                         {j.JobTitle}

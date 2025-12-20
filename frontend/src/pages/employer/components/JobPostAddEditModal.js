@@ -502,6 +502,69 @@ export default function JobPostAddEditModal({
       return;
     }
 
+    {
+      const today = new Date();
+      const todayStart = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+        0,
+        0,
+        0,
+        0
+      );
+      const expires = new Date(`${job.ExpiresAt}T00:00:00`);
+      if (Number.isNaN(expires.getTime())) {
+        toast.error("Ngày hết hạn không hợp lệ.");
+        return;
+      }
+      if (expires.getTime() <= todayStart.getTime()) {
+        toast.error("Ngày hết hạn phải từ ngày mai trở đi.");
+        return;
+      }
+    }
+
+    const workingTimes = Array.isArray(job?.WorkingTimes)
+      ? job.WorkingTimes
+      : [];
+    const hasAnyWorkingTimeInput = workingTimes.some((wt) => {
+      const dayFrom = (wt?.dayFrom || "").toString().trim();
+      const dayTo = (wt?.dayTo || "").toString().trim();
+      const timeFrom = (wt?.timeFrom || "").toString().trim();
+      const timeTo = (wt?.timeTo || "").toString().trim();
+      return dayFrom || dayTo || timeFrom || timeTo;
+    });
+
+    if (hasAnyWorkingTimeInput) {
+      const invalidRow = workingTimes.find((wt) => {
+        const dayFrom = (wt?.dayFrom || "").toString().trim();
+        const dayTo = (wt?.dayTo || "").toString().trim();
+        const timeFrom = (wt?.timeFrom || "").toString().trim();
+        const timeTo = (wt?.timeTo || "").toString().trim();
+
+        if (!dayFrom && !dayTo && !timeFrom && !timeTo) return false;
+
+        const hasAnyDay = !!dayFrom || !!dayTo;
+        const hasAnyTime = !!timeFrom || !!timeTo;
+        const hasFullDay = !!dayFrom && !!dayTo;
+        const hasFullTime = !!timeFrom && !!timeTo;
+
+        if (hasAnyDay && !hasFullDay) return true;
+        if (hasAnyTime && !hasFullTime) return true;
+        if (hasFullDay && !hasFullTime) return true;
+        if (hasFullTime && !hasFullDay) return true;
+
+        return false;
+      });
+
+      if (invalidRow) {
+        toast.error(
+          "Thời gian làm việc chưa đầy đủ. Vui lòng chọn đủ Từ thứ/Đến thứ và Từ giờ/Đến giờ cho mỗi dòng."
+        );
+        return;
+      }
+    }
+
     if (mode === "resubmit") {
       if (
         !job.ConfirmedAfterReject ||
@@ -680,8 +743,8 @@ export default function JobPostAddEditModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-black/30 backdrop-blur-sm">
-      <div className="w-full max-w-5xl bg-white border border-gray-100 shadow-2xl rounded-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm px-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl border border-gray-100">
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">
@@ -704,7 +767,7 @@ export default function JobPostAddEditModal({
           <div className="px-6 py-6 space-y-4 text-gray-700 max-h-[70vh] overflow-y-auto">
             {mode === "resubmit" &&
             (initialJob?.ReasonRejected || initialJob?.reasonRejected) ? (
-              <div className="p-4 border border-red-100 rounded-xl bg-red-50">
+              <div className="rounded-xl border border-red-100 bg-red-50 p-4">
                 <div className="text-sm font-bold text-red-800">
                   Lý do bị từ chối (Admin)
                 </div>
@@ -726,7 +789,7 @@ export default function JobPostAddEditModal({
                     handleInputChange("ConfirmedAfterReject", e.target.value)
                   }
                   rows={4}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Ghi rõ bạn đã chỉnh sửa những gì..."
                 />
               </label>
@@ -742,12 +805,12 @@ export default function JobPostAddEditModal({
                   onChange={(e) =>
                     handleInputChange("JobTitle", e.target.value)
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </label>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className="space-y-1 text-sm" ref={categoryRef}>
                 <span className="font-semibold text-gray-800">Danh mục</span>
                 <div className="relative">
@@ -770,7 +833,7 @@ export default function JobPostAddEditModal({
                         setSpecOpen(false);
                       }
                     }}
-                    className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-12 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   {(categorySearch !== "" || job.CategoryID) && (
                     <button
@@ -783,15 +846,15 @@ export default function JobPostAddEditModal({
                         setSpecOpen(false);
                         setCategoryOpen(true);
                       }}
-                      className="absolute inset-y-0 px-2 text-gray-400 right-2 hover:text-gray-600"
+                      className="absolute inset-y-0 right-2 px-2 text-gray-400 hover:text-gray-600"
                       aria-label="Xóa danh mục"
                     >
                       ×
                     </button>
                   )}
                   {categoryOpen && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-                      <div className="overflow-y-auto max-h-56">
+                    <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
+                      <div className="max-h-56 overflow-y-auto">
                         {filteredCategories.map((c) => (
                           <button
                             type="button"
@@ -845,7 +908,7 @@ export default function JobPostAddEditModal({
                       }
                     }}
                     disabled={!job.CategoryID}
-                    className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-12 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
                   />
                   {(specSearch !== "" || job.SpecializationID) && (
                     <button
@@ -855,15 +918,15 @@ export default function JobPostAddEditModal({
                         setSpecSearch("");
                         setSpecOpen(!!job.CategoryID);
                       }}
-                      className="absolute inset-y-0 px-2 text-gray-400 right-2 hover:text-gray-600"
+                      className="absolute inset-y-0 right-2 px-2 text-gray-400 hover:text-gray-600"
                       aria-label="Xóa chuyên môn"
                     >
                       ×
                     </button>
                   )}
                   {specOpen && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-blue-100 rounded-lg shadow-lg shadow-blue-100">
-                      <div className="overflow-y-auto max-h-56">
+                    <div className="absolute z-10 mt-1 w-full rounded-lg border border-blue-100 bg-white shadow-lg shadow-blue-100">
+                      <div className="max-h-56 overflow-y-auto">
                         {filteredSpecs.map((s) => (
                           <button
                             type="button"
@@ -894,7 +957,7 @@ export default function JobPostAddEditModal({
               </label>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className="space-y-1 text-sm" ref={educationRef}>
                 <span className="font-semibold text-gray-800">
                   Trình độ học vấn
@@ -916,7 +979,7 @@ export default function JobPostAddEditModal({
                         handleInputChange("EducationLevel", "");
                       }
                     }}
-                    className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-12 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   {(educationSearch !== "" || job.EducationLevel) && (
                     <button
@@ -926,15 +989,15 @@ export default function JobPostAddEditModal({
                         setEducationSearch("");
                         setEducationOpen(false);
                       }}
-                      className="absolute inset-y-0 px-2 text-gray-400 right-2 hover:text-gray-600"
+                      className="absolute inset-y-0 right-2 px-2 text-gray-400 hover:text-gray-600"
                       aria-label="Xóa trình độ"
                     >
                       ×
                     </button>
                   )}
                   {educationOpen && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-                      <div className="overflow-y-auto max-h-56">
+                    <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
+                      <div className="max-h-56 overflow-y-auto">
                         {educationList
                           .filter((e) =>
                             (educationSearch || "").toLowerCase().trim()
@@ -991,7 +1054,7 @@ export default function JobPostAddEditModal({
                         handleInputChange("JobType", "");
                       }
                     }}
-                    className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-12 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   {(jobTypeSearch !== "" || job.JobType) && (
                     <button
@@ -1001,15 +1064,15 @@ export default function JobPostAddEditModal({
                         setJobTypeSearch("");
                         setJobTypeOpen(true);
                       }}
-                      className="absolute inset-y-0 px-2 text-gray-400 right-2 hover:text-gray-600"
+                      className="absolute inset-y-0 right-2 px-2 text-gray-400 hover:text-gray-600"
                       aria-label="Xóa vị trí công việc"
                     >
                       ×
                     </button>
                   )}
                   {jobTypeOpen && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-                      <div className="overflow-y-auto max-h-56">
+                    <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
+                      <div className="max-h-56 overflow-y-auto">
                         {filteredJobTypes.map((t) => (
                           <button
                             type="button"
@@ -1036,7 +1099,7 @@ export default function JobPostAddEditModal({
               </label>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className="space-y-1 text-sm">
                 <span className="font-semibold text-gray-800">
                   Lương tối thiểu
@@ -1048,7 +1111,7 @@ export default function JobPostAddEditModal({
                   onChange={(e) =>
                     handleSalaryChange("SalaryMin", e.target.value)
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </label>
               <label className="space-y-1 text-sm">
@@ -1062,22 +1125,22 @@ export default function JobPostAddEditModal({
                   onChange={(e) =>
                     handleSalaryChange("SalaryMax", e.target.value)
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </label>
-              <p className="-mt-1 text-xs italic text-gray-500">
+              <p className="text-xs text-gray-500 italic -mt-1">
                 Nhập cả hai mức lương là 0 hoặc để trống để hiển thị
                 <b> Thỏa thuận</b>.
                 <br />
                 Chỉ nhập lương tối thiểu thì hiển thị là <b>Từ</b>.
               </p>
 
-              <p className="-mt-1 text-xs italic text-gray-500">
+              <p className="text-xs text-gray-500 italic -mt-1">
                 Chỉ nhập lương tối đa thì hiển thị là <b>Lên đến</b>.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className="space-y-1 text-sm" ref={experienceRef}>
                 <span className="font-semibold text-gray-800">Kinh nghiệm</span>
                 <div className="relative">
@@ -1097,7 +1160,7 @@ export default function JobPostAddEditModal({
                         handleInputChange("Experience", "");
                       }
                     }}
-                    className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 pr-12 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   {(experienceSearch !== "" || job.Experience) && (
                     <button
@@ -1107,15 +1170,15 @@ export default function JobPostAddEditModal({
                         setExperienceSearch("");
                         setExperienceOpen(false);
                       }}
-                      className="absolute inset-y-0 px-2 text-gray-400 right-2 hover:text-gray-600"
+                      className="absolute inset-y-0 right-2 px-2 text-gray-400 hover:text-gray-600"
                       aria-label="Xóa kinh nghiệm"
                     >
                       ×
                     </button>
                   )}
                   {experienceOpen && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
-                      <div className="overflow-y-auto max-h-56">
+                    <div className="absolute z-10 mt-1 w-full rounded-lg border border-gray-200 bg-white shadow-lg">
+                      <div className="max-h-56 overflow-y-auto">
                         {filteredExperiences.map((e) => (
                           <button
                             type="button"
@@ -1152,15 +1215,15 @@ export default function JobPostAddEditModal({
                   onChange={(e) =>
                     handleInputChange("VacancyCount", e.target.value)
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </label>
-              <label className="col-start-2 -mt-2 text-xs italic text-gray-500">
+              <label className="col-start-2 text-xs text-gray-500 italic -mt-2">
                 Nếu không nhập thì mặc định là 1
               </label>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <label className="space-y-1 text-sm">
                 <span className="font-semibold text-gray-800">
                   Địa điểm làm việc
@@ -1171,7 +1234,7 @@ export default function JobPostAddEditModal({
                   onChange={(e) =>
                     handleInputChange("Location", e.target.value)
                   }
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </label>
               <label className="space-y-1 text-sm">
@@ -1186,8 +1249,12 @@ export default function JobPostAddEditModal({
                   onChange={(e) =>
                     handleInputChange("ExpiresAt", e.target.value)
                   }
-                  min={new Date().toISOString().split("T")[0]}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  min={(() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() + 1);
+                    return d.toISOString().split("T")[0];
+                  })()}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </label>
             </div>
@@ -1207,7 +1274,7 @@ export default function JobPostAddEditModal({
                       { dayFrom: "", dayTo: "", timeFrom: "", timeTo: "" },
                     ])
                   }
-                  className="inline-flex items-center gap-2 px-4 py-2 text-blue-700 transition hover:text-blue-900"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-blue-700 hover:text-blue-900 transition"
                 >
                   <FiPlus size={20} />
                 </button>
@@ -1228,7 +1295,7 @@ export default function JobPostAddEditModal({
                           next[idx] = { ...wt, dayFrom: e.target.value };
                           handleInputChange("WorkingTimes", next);
                         }}
-                        className="px-3 py-2 border border-gray-300 rounded-lg"
+                        className="rounded-lg border border-gray-300 px-3 py-2"
                       >
                         <option value="">—</option>
                         {Object.values(DAY_OF_WEEK).map((d) => (
@@ -1248,7 +1315,7 @@ export default function JobPostAddEditModal({
                           next[idx] = { ...wt, dayTo: e.target.value };
                           handleInputChange("WorkingTimes", next);
                         }}
-                        className="px-3 py-2 border border-gray-300 rounded-lg"
+                        className="rounded-lg border border-gray-300 px-3 py-2"
                       >
                         <option value="">—</option>
                         {Object.values(DAY_OF_WEEK).map((d) => (
@@ -1275,7 +1342,7 @@ export default function JobPostAddEditModal({
                             };
                             handleInputChange("WorkingTimes", next);
                           }}
-                          className="flex-1 px-3 py-2 border rounded-lg"
+                          className="flex-1 rounded-lg border px-3 py-2"
                         >
                           <option value="">--</option>
                           {Array.from({ length: 24 }).map((_, h) => {
@@ -1300,7 +1367,7 @@ export default function JobPostAddEditModal({
                             };
                             handleInputChange("WorkingTimes", next);
                           }}
-                          className="flex-1 px-3 py-2 border rounded-lg"
+                          className="flex-1 rounded-lg border px-3 py-2"
                         >
                           <option value="">--</option>
                           {[
@@ -1344,7 +1411,7 @@ export default function JobPostAddEditModal({
                             };
                             handleInputChange("WorkingTimes", next);
                           }}
-                          className="flex-1 px-3 py-2 border rounded-lg"
+                          className="flex-1 rounded-lg border px-3 py-2"
                         >
                           <option value="">--</option>
                           {Array.from({ length: 24 }).map((_, h) => {
@@ -1369,7 +1436,7 @@ export default function JobPostAddEditModal({
                             };
                             handleInputChange("WorkingTimes", next);
                           }}
-                          className="flex-1 px-3 py-2 border rounded-lg"
+                          className="flex-1 rounded-lg border px-3 py-2"
                         >
                           <option value="">--</option>
                           {[
@@ -1423,7 +1490,7 @@ export default function JobPostAddEditModal({
                 ))}
               </div>
             </div>
-            <span className="text-xs italic text-gray-500">
+            <span className="text-xs text-gray-500 italic">
               Nếu chọn cùng chung một thứ thì sẽ hiển thị mỗi thứ đó. <br />
               Nếu không chọn thì sẽ hiển thị là{" "}
               <b>Thời gian làm việc linh hoạt</b>.
@@ -1440,7 +1507,7 @@ export default function JobPostAddEditModal({
                         applyBoldToField("JobDescription", jobDescriptionRef)
                       }
                       disabled={jdPreview}
-                      className="w-8 h-8 font-bold text-gray-700 border border-gray-200 rounded hover:bg-gray-50"
+                      className="h-8 w-8 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold"
                       title="In đậm"
                     >
                       B
@@ -1451,7 +1518,7 @@ export default function JobPostAddEditModal({
                         applyBulletToField("JobDescription", jobDescriptionRef)
                       }
                       disabled={jdPreview}
-                      className="w-8 h-8 text-gray-700 border border-gray-200 rounded hover:bg-gray-50"
+                      className="h-8 w-8 rounded border border-gray-200 text-gray-700 hover:bg-gray-50"
                       title="Gạch đầu dòng (-)"
                     >
                       -
@@ -1477,7 +1544,7 @@ export default function JobPostAddEditModal({
                     onChange={(e) =>
                       handleInputChange("JobDescription", e.target.value)
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 )}
               </div>
@@ -1494,7 +1561,7 @@ export default function JobPostAddEditModal({
                         applyBoldToField("Requirements", requirementsRef)
                       }
                       disabled={reqPreview}
-                      className="w-8 h-8 font-bold text-gray-700 border border-gray-200 rounded hover:bg-gray-50"
+                      className="h-8 w-8 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold"
                       title="In đậm"
                     >
                       B
@@ -1505,7 +1572,7 @@ export default function JobPostAddEditModal({
                         applyBulletToField("Requirements", requirementsRef)
                       }
                       disabled={reqPreview}
-                      className="w-8 h-8 text-gray-700 border border-gray-200 rounded hover:bg-gray-50"
+                      className="h-8 w-8 rounded border border-gray-200 text-gray-700 hover:bg-gray-50"
                       title="Gạch đầu dòng (-)"
                     >
                       -
@@ -1531,7 +1598,7 @@ export default function JobPostAddEditModal({
                     onChange={(e) =>
                       handleInputChange("Requirements", e.target.value)
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 )}
               </div>
@@ -1546,7 +1613,7 @@ export default function JobPostAddEditModal({
                       type="button"
                       onClick={() => applyBoldToField("Benefits", benefitsRef)}
                       disabled={benPreview}
-                      className="w-8 h-8 font-bold text-gray-700 border border-gray-200 rounded hover:bg-gray-50"
+                      className="h-8 w-8 rounded border border-gray-200 text-gray-700 hover:bg-gray-50 font-bold"
                       title="In đậm"
                     >
                       B
@@ -1557,7 +1624,7 @@ export default function JobPostAddEditModal({
                         applyBulletToField("Benefits", benefitsRef)
                       }
                       disabled={benPreview}
-                      className="w-8 h-8 text-gray-700 border border-gray-200 rounded hover:bg-gray-50"
+                      className="h-8 w-8 rounded border border-gray-200 text-gray-700 hover:bg-gray-50"
                       title="Gạch đầu dòng (-)"
                     >
                       -
@@ -1583,17 +1650,17 @@ export default function JobPostAddEditModal({
                     onChange={(e) =>
                       handleInputChange("Benefits", e.target.value)
                     }
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 )}
               </div>
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 px-6 py-4 border-t">
+          <div className="px-6 py-4 border-t flex justify-end gap-3">
             <button
               type="button"
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
               onClick={onClose}
             >
               Hủy
