@@ -187,9 +187,15 @@ router.get("/applied", checkAuth, async (req, res) => {
         FROM Applications a
         JOIN Jobs j ON j.JobID = a.JobID
         JOIN Companies c ON c.CompanyID = j.CompanyID
+        JOIN Users u_emp ON u_emp.FirebaseUserID = c.OwnerUserID
         LEFT JOIN Specializations sp ON sp.SpecializationID = j.SpecializationID
         LEFT JOIN CVs cv ON cv.CVID = a.CVID
         WHERE a.CandidateID = @CandidateID
+          AND ISNULL(u_emp.IsBanned, 0) = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM BlockedCompanies bc
+            WHERE bc.UserID = @CandidateID AND bc.CompanyID = c.CompanyID
+          )
         ORDER BY a.AppliedAt DESC, a.ApplicationID DESC
       `);
 
@@ -287,6 +293,11 @@ router.get("/:id/applicants", checkAuth, async (req, res) => {
             ViewedAt DESC
         ) cvv
         WHERE a.JobID = @JobID
+          AND ISNULL(u.IsBanned, 0) = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM BlockedCompanies bc
+            WHERE bc.UserID = a.CandidateID AND bc.CompanyID = c.CompanyID
+          )
         ORDER BY a.AppliedAt DESC, a.ApplicationID DESC
       `);
 
@@ -346,6 +357,7 @@ router.get("/active", checkAuth, async (req, res) => {
         j.VacancyCount,
         j.CreatedAt,
         j.ExpiresAt,
+        j.ApprovedAt,
         j.LastPushedAt,
         j.Status,
         c.CompanyID,
@@ -376,11 +388,22 @@ router.get("/active", checkAuth, async (req, res) => {
         ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS IsCompanyVip
       FROM Jobs j
       JOIN Companies c ON j.CompanyID = c.CompanyID
+      JOIN Users u_emp ON u_emp.FirebaseUserID = c.OwnerUserID
       LEFT JOIN Categories cat ON j.CategoryID = cat.CategoryID
       LEFT JOIN Specializations sp ON j.SpecializationID = sp.SpecializationID
       WHERE j.Status = 1
         AND (j.ExpiresAt IS NULL OR j.ExpiresAt > GETDATE())
-      ORDER BY j.LastPushedAt DESC, j.CreatedAt DESC
+        AND ISNULL(u_emp.IsBanned, 0) = 0
+        AND NOT EXISTS (
+          SELECT 1 FROM BlockedCompanies bc
+          WHERE bc.UserID = @UserID AND bc.CompanyID = c.CompanyID
+        )
+      ORDER BY 
+        CASE 
+          WHEN j.LastPushedAt IS NOT NULL THEN j.LastPushedAt
+          WHEN j.ApprovedAt IS NOT NULL THEN j.ApprovedAt
+          ELSE j.CreatedAt
+        END DESC
     `);
     return res.status(200).json(result.recordset);
   } catch (error) {
@@ -449,9 +472,15 @@ router.get("/saved", checkAuth, async (req, res) => {
         FROM SavedJobs sj
         JOIN Jobs j ON sj.JobID = j.JobID
         JOIN Companies c ON j.CompanyID = c.CompanyID
+        JOIN Users u_emp ON u_emp.FirebaseUserID = c.OwnerUserID
         LEFT JOIN Categories cat ON j.CategoryID = cat.CategoryID
         LEFT JOIN Specializations sp ON j.SpecializationID = sp.SpecializationID
         WHERE sj.UserID = @UserID
+          AND ISNULL(u_emp.IsBanned, 0) = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM BlockedCompanies bc
+            WHERE bc.UserID = @UserID AND bc.CompanyID = c.CompanyID
+          )
         ORDER BY sj.SavedAt DESC
       `);
 
@@ -2360,14 +2389,25 @@ router.get("/:id", checkAuth, async (req, res) => {
           ${workingTimesSubquery} AS WorkingTimes
         FROM Jobs j
         JOIN Companies c ON j.CompanyID = c.CompanyID
+        JOIN Users u_emp ON u_emp.FirebaseUserID = c.OwnerUserID
         LEFT JOIN Categories cat ON j.CategoryID = cat.CategoryID
         LEFT JOIN Specializations sp ON j.SpecializationID = sp.SpecializationID
         WHERE j.JobID = @JobID
+          AND ISNULL(u_emp.IsBanned, 0) = 0
+          AND (
+            @UserID = '' 
+            OR NOT EXISTS (
+              SELECT 1 FROM BlockedCompanies bc
+              WHERE bc.UserID = @UserID AND bc.CompanyID = c.CompanyID
+            )
+          )
       `);
 
     const job = result.recordset?.[0];
     if (!job) {
-      return res.status(404).json({ message: "Không tìm thấy công việc." });
+      return res.status(404).json({
+        message: "Nội dung bạn tìm không tồn tại, vui lòng kiểm tra lại.",
+      });
     }
 
     let workingTimes = [];

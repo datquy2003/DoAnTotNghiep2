@@ -191,8 +191,16 @@ router.get("/candidate/applicant-list/:jobId", checkAuth, async (req, res) => {
               AND ISNULL(us.SnapshotPlanType, sp.PlanType) <> 'ONE_TIME'
           ) THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT) END AS IsVip
         FROM Applications a
+        JOIN Jobs j ON j.JobID = a.JobID
+        JOIN Companies c ON c.CompanyID = j.CompanyID
+        JOIN Users u ON u.FirebaseUserID = a.CandidateID
         LEFT JOIN CandidateProfiles cp ON cp.UserID = a.CandidateID
         WHERE a.JobID = @JobID
+          AND ISNULL(u.IsBanned, 0) = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM BlockedCompanies bc
+            WHERE bc.UserID = a.CandidateID AND bc.CompanyID = c.CompanyID
+          )
         ORDER BY a.AppliedAt DESC, a.ApplicationID DESC
       `);
 

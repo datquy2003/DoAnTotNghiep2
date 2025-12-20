@@ -90,28 +90,32 @@ router.get("/reports/revenue", checkAuth, checkAdminRole, async (req, res) => {
 
     if (granularity !== "month") {
       startDate = new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate(),
-        0,
-        0,
-        0,
-        0
+        Date.UTC(
+          startDate.getFullYear(),
+          startDate.getMonth(),
+          startDate.getDate(),
+          0,
+          0,
+          0,
+          0
+        )
       );
       endDate = new Date(
-        endDate.getFullYear(),
-        endDate.getMonth(),
-        endDate.getDate(),
-        0,
-        0,
-        0,
-        0
+        Date.UTC(
+          endDate.getFullYear(),
+          endDate.getMonth(),
+          endDate.getDate(),
+          0,
+          0,
+          0,
+          0
+        )
       );
     }
 
     const endExclusive = new Date(endDate);
     if (granularity !== "month") {
-      endExclusive.setDate(endExclusive.getDate() + 1);
+      endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
     } else {
       endExclusive.setMilliseconds(endExclusive.getMilliseconds() + 1);
     }
@@ -209,30 +213,34 @@ router.get("/reports/revenue", checkAuth, checkAdminRole, async (req, res) => {
       );
 
       const cursor = new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate(),
-        0,
-        0,
-        0,
-        0
+        Date.UTC(
+          startDate.getUTCFullYear(),
+          startDate.getUTCMonth(),
+          startDate.getUTCDate(),
+          0,
+          0,
+          0,
+          0
+        )
       );
       const endCursor = new Date(
-        endDate.getFullYear(),
-        endDate.getMonth(),
-        endDate.getDate(),
-        0,
-        0,
-        0,
-        0
+        Date.UTC(
+          endDate.getUTCFullYear(),
+          endDate.getUTCMonth(),
+          endDate.getUTCDate(),
+          0,
+          0,
+          0,
+          0
+        )
       );
 
       while (cursor.getTime() <= endCursor.getTime()) {
-        const label = `${cursor.getFullYear()}-${String(
-          cursor.getMonth() + 1
-        ).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+        const label = `${cursor.getUTCFullYear()}-${String(
+          cursor.getUTCMonth() + 1
+        ).padStart(2, "0")}-${String(cursor.getUTCDate()).padStart(2, "0")}`;
         bar.push({ label, total: map.get(label) || 0 });
-        cursor.setDate(cursor.getDate() + 1);
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
       }
     }
 
@@ -304,28 +312,32 @@ router.get(
 
       if (granularity !== "month") {
         startDate = new Date(
-          startDate.getFullYear(),
-          startDate.getMonth(),
-          startDate.getDate(),
-          0,
-          0,
-          0,
-          0
+          Date.UTC(
+            startDate.getFullYear(),
+            startDate.getMonth(),
+            startDate.getDate(),
+            0,
+            0,
+            0,
+            0
+          )
         );
         endDate = new Date(
-          endDate.getFullYear(),
-          endDate.getMonth(),
-          endDate.getDate(),
-          0,
-          0,
-          0,
-          0
+          Date.UTC(
+            endDate.getFullYear(),
+            endDate.getMonth(),
+            endDate.getDate(),
+            0,
+            0,
+            0,
+            0
+          )
         );
       }
 
       const endExclusive = new Date(endDate);
       if (granularity !== "month") {
-        endExclusive.setDate(endExclusive.getDate() + 1);
+        endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
       } else {
         endExclusive.setMilliseconds(endExclusive.getMilliseconds() + 1);
       }
@@ -417,30 +429,34 @@ router.get(
         );
 
         const cursor = new Date(
-          startDate.getFullYear(),
-          startDate.getMonth(),
-          startDate.getDate(),
-          0,
-          0,
-          0,
-          0
+          Date.UTC(
+            startDate.getUTCFullYear(),
+            startDate.getUTCMonth(),
+            startDate.getUTCDate(),
+            0,
+            0,
+            0,
+            0
+          )
         );
         const endCursor = new Date(
-          endDate.getFullYear(),
-          endDate.getMonth(),
-          endDate.getDate(),
-          0,
-          0,
-          0,
-          0
+          Date.UTC(
+            endDate.getUTCFullYear(),
+            endDate.getUTCMonth(),
+            endDate.getUTCDate(),
+            0,
+            0,
+            0,
+            0
+          )
         );
 
         while (cursor.getTime() <= endCursor.getTime()) {
-          const label = `${cursor.getFullYear()}-${String(
-            cursor.getMonth() + 1
-          ).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+          const label = `${cursor.getUTCFullYear()}-${String(
+            cursor.getUTCMonth() + 1
+          ).padStart(2, "0")}-${String(cursor.getUTCDate()).padStart(2, "0")}`;
           bar.push({ label, total: map.get(label) || 0 });
-          cursor.setDate(cursor.getDate() + 1);
+          cursor.setUTCDate(cursor.getUTCDate() + 1);
         }
       }
 
@@ -513,28 +529,32 @@ router.get(
 
       if (granularity !== "month") {
         startDate = new Date(
-          startDate.getFullYear(),
-          startDate.getMonth(),
-          startDate.getDate(),
-          0,
-          0,
-          0,
-          0
+          Date.UTC(
+            startDate.getFullYear(),
+            startDate.getMonth(),
+            startDate.getDate(),
+            0,
+            0,
+            0,
+            0
+          )
         );
         endDate = new Date(
-          endDate.getFullYear(),
-          endDate.getMonth(),
-          endDate.getDate(),
-          0,
-          0,
-          0,
-          0
+          Date.UTC(
+            endDate.getFullYear(),
+            endDate.getMonth(),
+            endDate.getDate(),
+            0,
+            0,
+            0,
+            0
+          )
         );
       }
 
       const endExclusive = new Date(endDate);
       if (granularity !== "month") {
-        endExclusive.setDate(endExclusive.getDate() + 1);
+        endExclusive.setUTCDate(endExclusive.getUTCDate() + 1);
       } else {
         endExclusive.setMilliseconds(endExclusive.getMilliseconds() + 1);
       }
@@ -641,30 +661,34 @@ router.get(
         );
 
         const cursor = new Date(
-          startDate.getFullYear(),
-          startDate.getMonth(),
-          startDate.getDate(),
-          0,
-          0,
-          0,
-          0
+          Date.UTC(
+            startDate.getUTCFullYear(),
+            startDate.getUTCMonth(),
+            startDate.getUTCDate(),
+            0,
+            0,
+            0,
+            0
+          )
         );
         const endCursor = new Date(
-          endDate.getFullYear(),
-          endDate.getMonth(),
-          endDate.getDate(),
-          0,
-          0,
-          0,
-          0
+          Date.UTC(
+            endDate.getUTCFullYear(),
+            endDate.getUTCMonth(),
+            endDate.getUTCDate(),
+            0,
+            0,
+            0,
+            0
+          )
         );
 
         while (cursor.getTime() <= endCursor.getTime()) {
-          const label = `${cursor.getFullYear()}-${String(
-            cursor.getMonth() + 1
-          ).padStart(2, "0")}-${String(cursor.getDate()).padStart(2, "0")}`;
+          const label = `${cursor.getUTCFullYear()}-${String(
+            cursor.getUTCMonth() + 1
+          ).padStart(2, "0")}-${String(cursor.getUTCDate()).padStart(2, "0")}`;
           bar.push({ label, total: map.get(label) || 0 });
-          cursor.setDate(cursor.getDate() + 1);
+          cursor.setUTCDate(cursor.getUTCDate() + 1);
         }
       }
 

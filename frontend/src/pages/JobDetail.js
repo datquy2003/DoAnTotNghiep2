@@ -18,10 +18,10 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { renderSalary } from "../utils/renderSalary";
 import { formatDateOnly } from "../utils/formatDateOnly";
+import { formatDate } from "../utils/formatDate";
 import { jobApi } from "../api/jobApi";
 import { renderJobPostRichText } from "../utils/jobPostRichText";
 import CvSelectionModal from "../components/modals/CvSelectionModal";
-// eslint-disable-next-line no-unused-vars
 import { vipApi } from "../api/vipApi";
 import { paymentApi } from "../api/paymentApi";
 import { vipFeatureApi } from "../api/vipFeatureApi";
@@ -43,26 +43,55 @@ const JobDetail = () => {
   const [savingId, setSavingId] = useState(null);
   const [applyingId, setApplyingId] = useState(null);
   const [countdown, setCountdown] = useState(null);
-  const [applicantCount, setApplicantCount] = useState(null);
   const [isCvModalOpen, setIsCvModalOpen] = useState(false);
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [isApplicantListModalOpen, setIsApplicantListModalOpen] =
     useState(false);
-  // eslint-disable-next-line no-unused-vars
   const [oneTimePlans, setOneTimePlans] = useState([]);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [applicantList, setApplicantList] = useState([]);
   const [loadingApplicantList, setLoadingApplicantList] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
 
   useEffect(() => {
     if (!job?.ExpiresAt) return;
 
     const updateCountdown = () => {
-      const now = new Date().getTime();
-      const expiresAt = new Date(job.ExpiresAt).getTime();
-      const diff = expiresAt - now;
+      const now = new Date();
+      const nowStr = now.toLocaleString("en-US", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+      const [nowMonth, nowDay, nowYear] = nowStr.split("/");
+      const nowDate = new Date(
+        parseInt(nowYear),
+        parseInt(nowMonth) - 1,
+        parseInt(nowDay)
+      );
 
-      if (diff <= 0) {
+      const expires = new Date(job.ExpiresAt);
+      const expiresStr = expires.toLocaleString("en-US", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+      const [expMonth, expDay, expYear] = expiresStr.split("/");
+      const expiresDate = new Date(
+        parseInt(expYear),
+        parseInt(expMonth) - 1,
+        parseInt(expDay)
+      );
+
+      const diffDays = expiresDate.getTime() - nowDate.getTime();
+
+      const nowTime = new Date().getTime();
+      const expiresTime = new Date(job.ExpiresAt).getTime();
+      const diff = expiresTime - nowTime;
+
+      if (diff <= 0 || diffDays <= 0) {
         setCountdown({
           days: 0,
           hours: 0,
@@ -73,7 +102,8 @@ const JobDetail = () => {
         return;
       }
 
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const days = Math.ceil(diffDays / (1000 * 60 * 60 * 24));
+
       const hours = Math.floor(
         (diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)
       );
@@ -104,20 +134,28 @@ const JobDetail = () => {
         setHasSaved(
           jobData.HasSaved === true || Number(jobData.HasSaved) === 1
         );
-        if (jobData.CanViewApplicantCount && jobData.ApplicantCount !== null) {
-          setApplicantCount(jobData.ApplicantCount);
-        }
       } catch (err) {
         console.error("Lỗi lấy chi tiết công việc:", err);
-        setError(
-          err.response?.data?.message || "Không thể tải thông tin công việc."
-        );
+        const errorMessage =
+          err.response?.data?.message || "Không thể tải thông tin công việc.";
+        setError(errorMessage);
+
+        if (
+          err.response?.status === 404 &&
+          errorMessage ===
+            "Nội dung bạn tìm không tồn tại, vui lòng kiểm tra lại."
+        ) {
+          setTimeout(() => {
+            navigate("/content-not-found");
+          }, 100);
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchJobDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const handleToggleSave = async () => {
@@ -150,11 +188,6 @@ const JobDetail = () => {
       const res = await jobApi.applyToJob(job.JobID, { cvId });
       toast.success(res?.data?.message || "Ứng tuyển thành công.");
       setHasApplied(true);
-      const response = await jobApi.getJobDetail(id);
-      const jobData = response.data;
-      if (jobData.CanViewApplicantCount && jobData.ApplicantCount !== null) {
-        setApplicantCount(jobData.ApplicantCount);
-      }
     } catch (err) {
       console.error("Lỗi apply:", err);
       toast.error(err?.response?.data?.message || "Không thể ứng tuyển.");
@@ -166,6 +199,7 @@ const JobDetail = () => {
 
   const handleViewCompany = () => {
     if (!job?.CompanyID) return;
+    navigate(`/companies/${job.CompanyID}`);
   };
 
   const loadApplicantList = async () => {
@@ -210,6 +244,7 @@ const JobDetail = () => {
       toast.error("Chưa tìm thấy gói ONE_TIME phù hợp. Vui lòng thử lại.");
       return;
     }
+    setPurchasing(true);
     try {
       const returnUrl = `/jobs/${job.JobID}?feature_key=CANDIDATE_COMPETITOR_INSIGHT`;
       const metadata = {
@@ -227,6 +262,7 @@ const JobDetail = () => {
         window.location.href = url;
       } else {
         toast.error("Không nhận được đường dẫn thanh toán Stripe.");
+        setPurchasing(false);
       }
     } catch (error) {
       console.error("Lỗi tạo phiên thanh toán:", error);
@@ -234,8 +270,26 @@ const JobDetail = () => {
         error.response?.data?.message ||
           "Không thể tạo phiên thanh toán. Vui lòng thử lại."
       );
+      setPurchasing(false);
     }
   };
+
+  useEffect(() => {
+    const fetchOneTimePlans = async () => {
+      if (!isCandidate) return;
+      try {
+        const res = await vipApi.getVipPackages(4);
+        const plans = Array.isArray(res.data)
+          ? res.data.filter((p) => p.PlanType === "ONE_TIME")
+          : [];
+        setOneTimePlans(plans);
+        setSelectedPlanId(plans[0]?.PlanID || null);
+      } catch (error) {
+        console.error("Lỗi tải gói ONE_TIME:", error);
+      }
+    };
+    fetchOneTimePlans();
+  }, [isCandidate]);
 
   useEffect(() => {
     const checkPaymentSuccess = async () => {
@@ -701,20 +755,16 @@ const JobDetail = () => {
                 />
                 {hasSaved ? "Đã lưu" : "Lưu tin"}
               </button>
-              {hasApplied &&
-                applicantCount !== null &&
-                applicantCount !== undefined && (
-                  <button
-                    type="button"
-                    onClick={handleViewApplicantCount}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 font-semibold hover:bg-blue-100 transition-colors"
-                  >
-                    <FiUsers className="h-5 w-5" />
-                    <span className="text-sm">
-                      {applicantCount} người đã ứng tuyển
-                    </span>
-                  </button>
-                )}
+              {hasApplied && (
+                <button
+                  type="button"
+                  onClick={handleViewApplicantCount}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 font-semibold hover:bg-blue-100 transition-colors"
+                >
+                  <FiUsers className="h-5 w-5" />
+                  <span className="text-sm">Xem số người đã ứng tuyển</span>
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -782,11 +832,11 @@ const JobDetail = () => {
                     Để sau
                   </button>
                   <button
-                    className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                    className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     onClick={handlePurchaseFeature}
-                    disabled={!selectedPlanId}
+                    disabled={!selectedPlanId || purchasing}
                   >
-                    Mua
+                    {purchasing ? "Đang xử lý..." : "Mua"}
                   </button>
                 </div>
               </div>
@@ -844,9 +894,7 @@ const JobDetail = () => {
                                 {applicant.appliedAt && (
                                   <p className="text-xs text-gray-500">
                                     Ứng tuyển lúc:{" "}
-                                    {new Date(
-                                      applicant.appliedAt
-                                    ).toLocaleString("vi-VN")}
+                                    {formatDate(applicant.appliedAt)}
                                   </p>
                                 )}
                               </div>

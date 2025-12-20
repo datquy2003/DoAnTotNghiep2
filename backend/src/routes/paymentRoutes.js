@@ -154,7 +154,7 @@ router.post("/verify-payment", checkAuth, async (req, res) => {
           .json({ message: "Gói không tìm thấy trong DB." });
       }
 
-      await transaction
+      const subscriptionResult = await transaction
         .request()
         .input("UserID", sql.NVarChar, userId)
         .input("PlanID", sql.Int, planId)
@@ -198,31 +198,43 @@ router.post("/verify-payment", checkAuth, async (req, res) => {
             @Status,
            @SnapshotPlanName, @SnapshotFeatures, @SnapshotPrice, @SnapshotPlanType,
            @Snapshot_JobPostDaily, @Snapshot_PushTopDaily, @Snapshot_CVStorage,
-           @Snapshot_ViewApplicantCount, @Snapshot_RevealCandidatePhone)
+           @Snapshot_ViewApplicantCount, @Snapshot_RevealCandidatePhone);
+          SELECT SCOPE_IDENTITY() AS SubscriptionID;
         `);
 
-      if (plan.PlanType === "ONE_TIME" || !plan.DurationInDays) {
-        await transaction
-          .request()
-          .input("UserID", sql.NVarChar, userId)
-          .input(
-            "Message",
-            sql.NVarChar,
-            buildOneTimeMessage(plan, plan.Price, session.metadata || {})
-          )
-          .input("LinkURL", sql.NVarChar, getRedirectForPlan(plan))
-          .input("Type", sql.NVarChar, NOTIF_TYPE_ONE_TIME)
-          .input("ReferenceID", sql.NVarChar, plan.PlanID.toString())
-          .query(
-            `
-            INSERT INTO Notifications (UserID, Message, LinkURL, Type, ReferenceID)
-            VALUES (@UserID, @Message, @LinkURL, @Type, @ReferenceID)
-          `
-          );
+      const subscriptionId = subscriptionResult.recordset[0]?.SubscriptionID;
 
-        const metadata = session.metadata || {};
-        const featureKey = metadata.featureKey;
-        const referenceId = metadata.jobId || metadata.candidateId || null;
+      if (!subscriptionId) {
+        await transaction.rollback();
+        return res.status(500).json({
+          message: "Không thể lấy SubscriptionID sau khi tạo subscription.",
+        });
+      }
+
+      const metadata = session.metadata || {};
+      const featureKey = metadata.featureKey;
+      const referenceId = metadata.jobId || metadata.candidateId || null;
+
+      if (plan.PlanType === "ONE_TIME" || !plan.DurationInDays) {
+        if (featureKey !== "CANDIDATE_COMPETITOR_INSIGHT") {
+          await transaction
+            .request()
+            .input("UserID", sql.NVarChar, userId)
+            .input(
+              "Message",
+              sql.NVarChar,
+              buildOneTimeMessage(plan, plan.Price, metadata)
+            )
+            .input("LinkURL", sql.NVarChar, getRedirectForPlan(plan))
+            .input("Type", sql.NVarChar, NOTIF_TYPE_ONE_TIME)
+            .input("ReferenceID", sql.NVarChar, plan.PlanID.toString())
+            .query(
+              `
+              INSERT INTO Notifications (UserID, Message, LinkURL, Type, ReferenceID)
+              VALUES (@UserID, @Message, @LinkURL, @Type, @ReferenceID)
+            `
+            );
+        }
 
         if (featureKey && referenceId && subscriptionId) {
           const existingUsage = await transaction
@@ -243,9 +255,10 @@ router.post("/verify-payment", checkAuth, async (req, res) => {
               .input("UserID", sql.NVarChar, userId)
               .input("FeatureType", sql.NVarChar, featureKey)
               .input("ReferenceID", sql.NVarChar, referenceId)
-              .input("SubscriptionID", sql.Int, subscriptionId).query(`
-                INSERT INTO VipOneTimeUsage (UserID, FeatureType, ReferenceID, SubscriptionID, UsedAt)
-                VALUES (@UserID, @FeatureType, @ReferenceID, @SubscriptionID, GETDATE())
+              .input("ConsumedFromSubscriptionID", sql.Int, subscriptionId)
+              .query(`
+                INSERT INTO VipOneTimeUsage (UserID, FeatureType, ReferenceID, ConsumedFromSubscriptionID, UsedAt)
+                VALUES (@UserID, @FeatureType, @ReferenceID, @ConsumedFromSubscriptionID, GETDATE())
               `);
 
             if (
@@ -255,13 +268,21 @@ router.post("/verify-payment", checkAuth, async (req, res) => {
               let jobTitle = metadata.jobTitle || "";
 
               if (!jobTitle) {
-                const jobResult = await transaction
-                  .request()
-                  .input("JobID", sql.Int, parseInt(metadata.jobId))
-                  .query(
-                    `SELECT TOP 1 JobTitle FROM Jobs WHERE JobID = @JobID`
-                  );
-                jobTitle = jobResult.recordset[0]?.JobTitle || "công việc";
+                try {
+                  const jobIdNum = parseInt(metadata.jobId);
+                  if (!isNaN(jobIdNum)) {
+                    const jobResult = await transaction
+                      .request()
+                      .input("JobID", sql.Int, jobIdNum)
+                      .query(
+                        `SELECT TOP 1 JobTitle FROM Jobs WHERE JobID = @JobID`
+                      );
+                    jobTitle = jobResult.recordset[0]?.JobTitle || "công việc";
+                  }
+                } catch (jobTitleError) {
+                  console.error("Error fetching job title:", jobTitleError);
+                  jobTitle = "công việc";
+                }
               }
 
               const money = formatCurrencyVN(plan.Price) + "₫";
@@ -300,10 +321,15 @@ router.post("/verify-payment", checkAuth, async (req, res) => {
       });
     } catch (transError) {
       await transaction.rollback();
+      console.error("Transaction error:", transError);
       throw transError;
     }
   } catch (error) {
-    res.status(500).json({ message: "Lỗi xác thực thanh toán." });
+    console.error("Verify payment error:", error);
+    res.status(500).json({
+      message: "Lỗi xác thực thanh toán.",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 });
 

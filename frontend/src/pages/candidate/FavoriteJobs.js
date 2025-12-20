@@ -291,19 +291,39 @@ export default function FavoriteJobs() {
                   </div>
 
                   <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100 overflow-hidden max-w-[150px]">
-                      <FiBriefcase className="h-3 w-3 shrink-0" />
-                      <span className="min-w-0 truncate">
-                        {j.SpecializationName || "—"}
+                    {j.SpecializationName ? (
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border overflow-hidden max-w-[150px] ${
+                          isVip
+                            ? "bg-yellow-100 text-yellow-800 border-yellow-300"
+                            : "bg-blue-50 text-blue-700 border-blue-100"
+                        }`}
+                      >
+                        <FiBriefcase className="h-3 w-3 shrink-0" />
+                        <span className="min-w-0 truncate">
+                          {j.SpecializationName}
+                        </span>
                       </span>
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 overflow-hidden max-w-[170px]">
+                    ) : null}
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border overflow-hidden max-w-[170px] ${
+                        isVip
+                          ? "bg-yellow-100 text-yellow-800 border-yellow-300"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-100"
+                      }`}
+                    >
                       <span className="min-w-0 truncate">
                         {renderSalary(j.SalaryMin, j.SalaryMax)}
                       </span>
                     </span>
                     {j.CompanyCity ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-50 text-gray-700 border border-gray-100 overflow-hidden max-w-[130px]">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border overflow-hidden max-w-[130px] ${
+                          isVip
+                            ? "bg-yellow-100 text-yellow-800 border-yellow-300"
+                            : "bg-gray-50 text-gray-700 border-gray-100"
+                        }`}
+                      >
                         <FiMapPin className="h-3 w-3 shrink-0" />
                         <span className="min-w-0 truncate">
                           {j.CompanyCity}

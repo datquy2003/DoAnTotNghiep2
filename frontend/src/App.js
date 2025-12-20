@@ -15,6 +15,8 @@ import ChangePassword from "./pages/ChangePassword";
 import PaymentResult from "./pages/PaymentResult";
 import HomeJobs from "./pages/HomeJobs";
 import JobDetail from "./pages/JobDetail";
+import CompanyDetail from "./pages/CompanyDetail";
+import ContentNotFound from "./pages/ContentNotFound";
 
 import AdminLayout from "./pages/admin/AdminLayout";
 import UserManagement from "./pages/admin/UserManagement";
@@ -36,8 +38,7 @@ import CvManagement from "./pages/candidate/CvManagement";
 import AppliedJobs from "./pages/candidate/AppliedJobs";
 import FavoriteJobs from "./pages/candidate/FavoriteJobs";
 import CandidateSubscription from "./pages/candidate/CandidateSubscription";
-
-const BlockedCompanies = () => <div>Trang Công ty đã chặn</div>;
+import BlockedCompanies from "./pages/candidate/BlockedCompanies";
 
 const Messages = () => <div>Trang Nhắn tin</div>;
 
@@ -108,6 +109,8 @@ function App() {
       >
         <Route index element={<RoleBasedHome />} />
         <Route path="jobs/:id" element={<JobDetail />} />
+        <Route path="companies/:id" element={<CompanyDetail />} />
+        <Route path="content-not-found" element={<ContentNotFound />} />
         <Route path="messages" element={<Messages />} />
         <Route path="profile-edit" element={<ProfileEdit />} />
         <Route path="change-password" element={<ChangePassword />} />
@@ -116,10 +119,7 @@ function App() {
         <Route path="candidate/cvs" element={<CvManagement />} />
         <Route path="candidate/applied-jobs" element={<AppliedJobs />} />
         <Route path="candidate/favorite-jobs" element={<FavoriteJobs />} />
-        <Route
-          path="candidate/blocked-companies"
-          element={<BlockedCompanies />}
-        />
+        <Route path="candidate/blocked-companies" element={<BlockedCompanies />} />
         <Route
           path="candidate/subscription"
           element={<CandidateSubscription />}
