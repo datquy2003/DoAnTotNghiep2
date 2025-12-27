@@ -7,6 +7,8 @@ import {
   FiMapPin,
   FiUsers,
   FiEye,
+  FiChevronLeft,
+  FiChevronRight,
 } from "react-icons/fi";
 import toast from "react-hot-toast";
 import { profileApi } from "../../api/profileApi";
@@ -48,6 +50,8 @@ const ApplicantManagement = () => {
   const [purchaseModal, setPurchaseModal] = useState(null);
   const [oneTimePlans, setOneTimePlans] = useState([]);
   const [selectedPlanId, setSelectedPlanId] = useState(null);
+  const [page, setPage] = useState(1);
+  const candidatesPerPage = 10;
 
   const filteredSpecs = useMemo(() => {
     if (!specSearch.trim()) return specializations;
@@ -117,7 +121,7 @@ const ApplicantManagement = () => {
     if (!detailCandidate) return null;
     return (
       <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-[1px] z-50 flex items-center justify-center px-4">
-        <div className="w-full max-w-xl bg-white border border-gray-100 shadow-2xl rounded-xl">
+        <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full border border-gray-100">
           <div className="flex items-center justify-between px-5 py-4 border-b">
             <div>
               <h3 className="text-lg font-semibold text-gray-900">
@@ -162,7 +166,7 @@ const ApplicantManagement = () => {
                       .map((s) => (
                         <span
                           key={s.id || s.name}
-                          className="px-3 py-1 text-xs font-medium text-blue-700 border border-blue-100 rounded-full bg-blue-50"
+                          className="px-3 py-1 text-xs font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-100"
                         >
                           {s.name}
                         </span>
@@ -175,7 +179,7 @@ const ApplicantManagement = () => {
             </div>
             <div className="flex justify-between gap-3">
               <span className="font-semibold text-gray-700">Số điện thoại</span>
-              <div className="flex items-center gap-2 text-right">
+              <div className="text-right flex items-center gap-2">
                 <span>
                   {detailCandidate.phoneMasked ||
                     "Ứng viên này không có số điện thoại"}
@@ -184,7 +188,7 @@ const ApplicantManagement = () => {
                   <button
                     type="button"
                     onClick={() => handleRevealPhone(detailCandidate)}
-                    className="px-3 py-1 text-xs font-semibold text-orange-700 border border-orange-100 rounded-lg bg-orange-50 hover:bg-orange-100 disabled:opacity-60"
+                    className="px-3 py-1 text-xs font-semibold rounded-lg bg-orange-50 text-orange-700 border border-orange-100 hover:bg-orange-100 disabled:opacity-60"
                     disabled={revealLoadingId === detailCandidate.candidateId}
                   >
                     {revealLoadingId === detailCandidate.candidateId
@@ -202,7 +206,7 @@ const ApplicantManagement = () => {
                 {detailCandidate.profileSummary || "—"}
               </p>
             </div>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex justify-between gap-3 items-center">
               <span className="font-semibold text-gray-700">CV</span>
               {detailCandidate.defaultCv ? (
                 <a
@@ -218,9 +222,9 @@ const ApplicantManagement = () => {
               )}
             </div>
           </div>
-          <div className="flex justify-end px-5 py-4 border-t">
+          <div className="px-5 py-4 border-t flex justify-end">
             <button
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
               onClick={() => setDetailCandidate(null)}
             >
               Đóng
@@ -268,7 +272,7 @@ const ApplicantManagement = () => {
     if (!purchaseModal?.candidate) return null;
     return (
       <div className="fixed inset-0 bg-black bg-opacity-30 backdrop-blur-[1px] z-50 flex items-center justify-center px-4">
-        <div className="w-full max-w-lg bg-white border border-gray-100 shadow-2xl rounded-xl">
+        <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full border border-gray-100">
           <div className="flex items-center justify-between px-5 py-4 border-b">
             <h3 className="text-lg font-semibold text-gray-900">
               Mở khóa số điện thoại
@@ -293,9 +297,9 @@ const ApplicantManagement = () => {
               tiết ứng viên.
             </p>
             {oneTimePlans.length > 0 ? (
-              <div className="p-3 border rounded-lg bg-gray-50">
+              <div className="border rounded-lg p-3 bg-gray-50">
                 <select
-                  className="w-full px-3 py-2 text-sm border rounded-lg"
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
                   value={selectedPlanId || ""}
                   onChange={(e) => setSelectedPlanId(e.target.value)}
                 >
@@ -313,15 +317,15 @@ const ApplicantManagement = () => {
               </p>
             )}
           </div>
-          <div className="flex justify-end gap-3 px-5 py-4 border-t">
+          <div className="px-5 py-4 border-t flex justify-end gap-3">
             <button
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200"
               onClick={() => setPurchaseModal(null)}
             >
               Để sau
             </button>
             <button
-              className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+              className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700"
               onClick={handlePurchaseFeature}
             >
               Mua
@@ -500,12 +504,46 @@ const ApplicantManagement = () => {
 
   const handleReset = () => {
     setFilters(initialFilters);
+    setPage(1);
     loadCandidates(initialFilters);
   };
 
+  const totalPages = useMemo(() => {
+    const n = Math.ceil((candidates?.length || 0) / candidatesPerPage);
+    return Math.max(1, n);
+  }, [candidates, candidatesPerPage]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [totalPages]);
+
+  const paginatedCandidates = useMemo(() => {
+    const start = (page - 1) * candidatesPerPage;
+    return (candidates || []).slice(start, start + candidatesPerPage);
+  }, [candidates, page, candidatesPerPage]);
+
+  const pageItems = useMemo(() => {
+    const tp = totalPages;
+    if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
+    const items = new Set([1, tp, page - 1, page, page + 1]);
+    const arr = Array.from(items)
+      .filter((x) => x >= 1 && x <= tp)
+      .sort((a, b) => a - b);
+    const out = [];
+    for (let i = 0; i < arr.length; i++) {
+      out.push(arr[i]);
+      if (i < arr.length - 1 && arr[i + 1] - arr[i] > 1) out.push("…");
+    }
+    return out;
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filters]);
+
   return (
-    <div className="px-4 py-6 mx-auto max-w-7xl">
-      <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-center sm:justify-between">
+    <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">
             Danh sách ứng viên hiện có
@@ -515,12 +553,12 @@ const ApplicantManagement = () => {
 
       <form
         onSubmit={handleSubmit}
-        className="p-4 mb-6 bg-white border border-gray-100 shadow-sm rounded-xl"
+        className="bg-white border border-gray-100 rounded-xl shadow-sm p-4 mb-6"
       >
-        <div className="flex items-center gap-2 mb-3 font-semibold text-gray-700">
+        <div className="flex items-center gap-2 text-gray-700 font-semibold mb-3">
           <FiFilter /> Bộ lọc
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
             <label className="text-sm text-gray-600">Tuổi</label>
             <input
@@ -529,14 +567,14 @@ const ApplicantManagement = () => {
               value={filters.ageUnder}
               onChange={handleChange}
               min={0}
-              className="w-full px-3 py-2 mt-1 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="mt-1 w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Nhập độ tuổi giới hạn..."
             />
           </div>
           <div className="relative" ref={specWrapperRef}>
             <label className="text-sm text-gray-600">Chuyên môn</label>
             <div
-              className="flex items-center justify-between w-full gap-2 px-3 py-2 mt-1 bg-white border rounded-lg cursor-pointer"
+              className="mt-1 w-full border rounded-lg px-3 py-2 bg-white flex items-center justify-between cursor-pointer gap-2"
               onClick={() => setSpecOpen((o) => !o)}
             >
               {specOpen ? (
@@ -546,7 +584,7 @@ const ApplicantManagement = () => {
                   value={specSearch}
                   onChange={(e) => setSpecSearch(e.target.value)}
                   placeholder="Tìm chuyên môn..."
-                  className="flex-1 text-sm text-gray-800 border-none focus:outline-none"
+                  className="flex-1 border-none focus:outline-none text-sm text-gray-800"
                   onClick={(e) => e.stopPropagation()}
                 />
               ) : (
@@ -576,8 +614,8 @@ const ApplicantManagement = () => {
               </div>
             </div>
             {specOpen && (
-              <div className="absolute z-20 w-full mt-1 overflow-hidden bg-white border border-gray-200 rounded-lg shadow-lg max-h-64">
-                <div className="overflow-y-auto max-h-60">
+              <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-hidden">
+                <div className="max-h-60 overflow-y-auto">
                   {filteredSpecs.length === 0 ? (
                     <div className="px-3 py-2 text-sm text-gray-500">
                       Không tìm thấy
@@ -607,7 +645,7 @@ const ApplicantManagement = () => {
                     ))
                   )}
                 </div>
-                <div className="flex justify-end gap-3 p-2 text-sm border-t bg-gray-50">
+                <div className="p-2 border-t bg-gray-50 flex justify-end gap-3 text-sm">
                   <button
                     type="button"
                     className="text-gray-600 hover:text-gray-800"
@@ -636,7 +674,7 @@ const ApplicantManagement = () => {
           <div className="relative" ref={countryWrapperRef}>
             <label className="text-sm text-gray-600">Quốc gia</label>
             <div
-              className="flex items-center justify-between w-full gap-2 px-3 py-2 mt-1 bg-white border rounded-lg cursor-pointer"
+              className="mt-1 w-full border rounded-lg px-3 py-2 bg-white flex items-center justify-between cursor-pointer gap-2"
               onClick={() => setCountryOpen((o) => !o)}
             >
               {countryOpen ? (
@@ -646,7 +684,7 @@ const ApplicantManagement = () => {
                   value={countrySearch}
                   onChange={(e) => setCountrySearch(e.target.value)}
                   placeholder="Tìm quốc gia..."
-                  className="flex-1 text-sm text-gray-800 border-none focus:outline-none"
+                  className="flex-1 border-none focus:outline-none text-sm text-gray-800"
                   onClick={(e) => e.stopPropagation()}
                 />
               ) : (
@@ -673,8 +711,8 @@ const ApplicantManagement = () => {
               )}
             </div>
             {countryOpen && (
-              <div className="absolute z-20 w-full mt-1 overflow-hidden bg-white border border-gray-200 rounded-lg shadow-lg max-h-64">
-                <div className="overflow-y-auto max-h-60">
+              <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-hidden">
+                <div className="max-h-60 overflow-y-auto">
                   {filteredCountries.length === 0 ? (
                     <div className="px-3 py-2 text-sm text-gray-500">
                       Không tìm thấy
@@ -707,7 +745,7 @@ const ApplicantManagement = () => {
                     ))
                   )}
                 </div>
-                <div className="flex justify-end gap-3 p-2 text-sm border-t bg-gray-50">
+                <div className="p-2 border-t bg-gray-50 flex justify-end gap-3 text-sm">
                   <button
                     type="button"
                     className="text-gray-600 hover:text-gray-800"
@@ -762,7 +800,7 @@ const ApplicantManagement = () => {
                     setFilters((prev) => ({ ...prev, city: e.target.value }));
                   }}
                   placeholder="Nhập thành phố..."
-                  className="w-full text-sm text-gray-800 border-none focus:outline-none"
+                  className="w-full border-none focus:outline-none text-sm text-gray-800"
                   disabled={!filters.country}
                 />
               ) : cityOpen ? (
@@ -772,7 +810,7 @@ const ApplicantManagement = () => {
                   value={citySearch}
                   onChange={(e) => setCitySearch(e.target.value)}
                   placeholder="Tìm thành phố..."
-                  className="flex-1 text-sm text-gray-800 border-none focus:outline-none"
+                  className="flex-1 border-none focus:outline-none text-sm text-gray-800"
                   onClick={(e) => e.stopPropagation()}
                   disabled={!filters.country}
                 />
@@ -800,8 +838,8 @@ const ApplicantManagement = () => {
               )}
             </div>
             {cityOpen && cities.length > 0 && (
-              <div className="absolute z-20 w-full mt-1 overflow-hidden bg-white border border-gray-200 rounded-lg shadow-lg max-h-64">
-                <div className="overflow-y-auto max-h-60">
+              <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-hidden">
+                <div className="max-h-60 overflow-y-auto">
                   {filteredCities.length === 0 ? (
                     <div className="px-3 py-2 text-sm text-gray-500">
                       Không tìm thấy
@@ -830,7 +868,7 @@ const ApplicantManagement = () => {
                     ))
                   )}
                 </div>
-                <div className="flex justify-end gap-3 p-2 text-sm border-t bg-gray-50">
+                <div className="p-2 border-t bg-gray-50 flex justify-end gap-3 text-sm">
                   <button
                     type="button"
                     className="text-gray-600 hover:text-gray-800"
@@ -860,7 +898,7 @@ const ApplicantManagement = () => {
         <div className="flex flex-wrap gap-3 mt-4">
           <button
             type="submit"
-            className="inline-flex items-center gap-2 px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-blue-400"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-400"
             disabled={fetching}
           >
             <FiSearch />
@@ -869,7 +907,7 @@ const ApplicantManagement = () => {
           <button
             type="button"
             onClick={handleReset}
-            className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
             disabled={fetching}
           >
             <FiRefreshCw />
@@ -878,9 +916,9 @@ const ApplicantManagement = () => {
         </div>
       </form>
 
-      <div className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-xl">
-        <div className="flex items-center justify-between px-4 py-3 border-b">
-          <div className="flex items-center gap-2 font-semibold text-gray-700">
+      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+        <div className="px-4 py-3 border-b flex items-center justify-between">
+          <div className="flex items-center gap-2 text-gray-700 font-semibold">
             <FiUsers />
             <span>
               Ứng viên tìm thấy:{" "}
@@ -903,27 +941,27 @@ const ApplicantManagement = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="w-3/12 px-4 py-3 text-sm font-semibold text-left text-gray-700">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-3/12">
                     Họ tên
                   </th>
-                  <th className="w-1/12 px-4 py-3 text-sm font-semibold text-left text-gray-700">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-1/12">
                     Tuổi
                   </th>
-                  <th className="w-2/12 px-4 py-3 text-sm font-semibold text-left text-gray-700">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-2/12">
                     Địa điểm
                   </th>
-                  <th className="w-4/12 px-4 py-3 text-sm font-semibold text-left text-gray-700">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-4/12">
                     Chuyên môn
                   </th>
-                  <th className="w-1/12 px-4 py-3 text-sm font-semibold text-left text-right text-gray-700">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 w-1/12 text-right">
                     Chi tiết
                   </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {candidates.map((c) => (
+                {paginatedCandidates.map((c) => (
                   <tr key={c.candidateId} className="hover:bg-gray-50">
-                    <td className="w-3/12 px-4 py-3 align-top">
+                    <td className="px-4 py-3 align-top w-3/12">
                       <div className="flex flex-col gap-1">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-gray-900">
@@ -935,12 +973,12 @@ const ApplicantManagement = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="w-1/12 px-4 py-3 align-top">
-                      <div className="font-medium text-gray-800">
+                    <td className="px-4 py-3 align-top w-1/12">
+                      <div className="text-gray-800 font-medium">
                         {c.age ?? "—"}
                       </div>
                     </td>
-                    <td className="w-2/12 px-4 py-3 align-top">
+                    <td className="px-4 py-3 align-top w-2/12">
                       <div className="flex items-center gap-1 text-sm text-gray-700">
                         <FiMapPin className="text-gray-500" />
                         <span>
@@ -949,7 +987,7 @@ const ApplicantManagement = () => {
                         </span>
                       </div>
                     </td>
-                    <td className="w-4/12 px-4 py-3 align-top">
+                    <td className="px-4 py-3 align-top w-4/12">
                       {c.specializations?.length ? (
                         <div className="flex flex-wrap gap-2">
                           {[...c.specializations]
@@ -961,7 +999,7 @@ const ApplicantManagement = () => {
                             .map((s) => (
                               <span
                                 key={s.id || s.name}
-                                className="px-3 py-1 text-xs font-medium text-blue-700 border border-blue-100 rounded-full bg-blue-50"
+                                className="px-3 py-1 text-xs font-medium rounded-full bg-blue-50 text-blue-700 border border-blue-100"
                               >
                                 {s.name}
                               </span>
@@ -971,10 +1009,10 @@ const ApplicantManagement = () => {
                         <span className="text-sm text-gray-500">—</span>
                       )}
                     </td>
-                    <td className="w-1/12 px-4 py-3 text-right align-top">
+                    <td className="px-4 py-3 align-top w-1/12 text-right">
                       <button
                         type="button"
-                        className="inline-flex items-center gap-2 px-3 py-2 text-sm text-blue-700 border border-blue-100 rounded-lg bg-blue-50 hover:bg-blue-100"
+                        className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-100"
                         onClick={() => setDetailCandidate(c)}
                       >
                         <FiEye />
@@ -984,6 +1022,62 @@ const ApplicantManagement = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        {candidates.length > 0 && (
+          <div className="flex flex-row items-center justify-between pt-4 pb-4 border-t border-gray-200">
+            <div className="ml-4 text-sm text-gray-600">
+              Hiển thị{" "}
+              <span className="font-semibold text-gray-900">
+                {(page - 1) * candidatesPerPage + 1} -{" "}
+                {Math.min(page * candidatesPerPage, candidates.length)}
+              </span>{" "}
+              kết quả
+            </div>
+            {totalPages > 1 && (
+              <div className="mr-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  <FiChevronLeft className="h-4 w-4" />
+                </button>
+
+                <div className="flex items-center gap-1 flex-wrap justify-center">
+                  {pageItems.map((it, idx) =>
+                    it === "…" ? (
+                      <span key={`dots-${idx}`} className="px-2 text-gray-500">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={`p-${it}`}
+                        type="button"
+                        onClick={() => setPage(Number(it))}
+                        className={`min-w-9 px-3 py-2 rounded-lg border text-sm ${
+                          Number(it) === page
+                            ? "border-blue-200 bg-blue-50 text-blue-700 font-semibold"
+                            : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        {it}
+                      </button>
+                    )
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  <FiChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

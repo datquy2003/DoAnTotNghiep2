@@ -1,7 +1,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
-import { FiCheckCircle, FiEye, FiRefreshCw, FiXCircle } from "react-icons/fi";
+import {
+  FiCheckCircle,
+  FiEye,
+  FiRefreshCw,
+  FiXCircle,
+  FiChevronLeft,
+  FiChevronRight,
+} from "react-icons/fi";
 import { adminApi } from "../../api/adminApi";
 import { formatDate } from "../../utils/formatDate";
 import { renderSalary } from "../../utils/renderSalary";
@@ -31,12 +38,15 @@ const JobApproval = () => {
     isDanger: false,
     confirmText: "Xác nhận",
   });
+  const [page, setPage] = useState(1);
+  const jobsPerPage = 10;
 
   const loadPending = async () => {
     setLoading(true);
     try {
       const res = await adminApi.getPendingJobs();
       setJobs(Array.isArray(res?.data) ? res.data : []);
+      setPage(1);
     } catch (error) {
       console.error("Lỗi load pending jobs:", error);
       toast.error(
@@ -85,7 +95,12 @@ const JobApproval = () => {
         try {
           const res = await adminApi.approveJob(jobId);
           toast.success(res?.data?.message || "Đã duyệt bài đăng.");
-          setJobs((prev) => prev.filter((j) => j.JobID !== jobId));
+          const updated = jobs.filter((j) => j.JobID !== jobId);
+          setJobs(updated);
+          const newTotalPages = Math.ceil(updated.length / jobsPerPage);
+          if (page > newTotalPages && newTotalPages > 0) {
+            setPage(newTotalPages);
+          }
           if (selectedJobId === jobId) {
             setDetailOpen(false);
             setSelectedJobId(null);
@@ -120,7 +135,12 @@ const JobApproval = () => {
     try {
       const res = await adminApi.rejectJob(jobId, { reasonRejected: reason });
       toast.success(res?.data?.message || "Đã từ chối bài đăng.");
-      setJobs((prev) => prev.filter((j) => j.JobID !== jobId));
+      const updated = jobs.filter((j) => j.JobID !== jobId);
+      setJobs(updated);
+      const newTotalPages = Math.ceil(updated.length / jobsPerPage);
+      if (page > newTotalPages && newTotalPages > 0) {
+        setPage(newTotalPages);
+      }
       if (selectedJobId === jobId) {
         setDetailOpen(false);
         setSelectedJobId(null);
@@ -137,6 +157,35 @@ const JobApproval = () => {
   };
 
   const tableRows = useMemo(() => jobs, [jobs]);
+
+  const totalPages = useMemo(() => {
+    const n = Math.ceil((tableRows?.length || 0) / jobsPerPage);
+    return Math.max(1, n);
+  }, [tableRows, jobsPerPage]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [totalPages]);
+
+  const paginatedRows = useMemo(() => {
+    const start = (page - 1) * jobsPerPage;
+    return (tableRows || []).slice(start, start + jobsPerPage);
+  }, [tableRows, page, jobsPerPage]);
+
+  const pageItems = useMemo(() => {
+    const tp = totalPages;
+    if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
+    const items = new Set([1, tp, page - 1, page, page + 1]);
+    const arr = Array.from(items)
+      .filter((x) => x >= 1 && x <= tp)
+      .sort((a, b) => a - b);
+    const out = [];
+    for (let i = 0; i < arr.length; i++) {
+      out.push(arr[i]);
+      if (i < arr.length - 1 && arr[i + 1] - arr[i] > 1) out.push("…");
+    }
+    return out;
+  }, [page, totalPages]);
 
   return (
     <div className="space-y-4">
@@ -155,40 +204,40 @@ const JobApproval = () => {
           type="button"
           onClick={loadPending}
           disabled={loading}
-          className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-60"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-60"
         >
           <FiRefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           <span>Làm mới</span>
         </button>
       </div>
 
-      <div className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-xl">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Tiêu đề
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Công ty
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Mức lương
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Chuyên môn
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Trạng thái
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Ngày tạo
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Hết hạn
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Hành động
                 </th>
               </tr>
@@ -198,7 +247,7 @@ const JobApproval = () => {
                 <tr>
                   <td
                     colSpan={8}
-                    className="px-4 py-10 text-sm text-center text-gray-500"
+                    className="px-4 py-10 text-center text-gray-500 text-sm"
                   >
                     Đang tải...
                   </td>
@@ -207,13 +256,13 @@ const JobApproval = () => {
                 <tr>
                   <td
                     colSpan={8}
-                    className="px-4 py-10 text-sm text-center text-gray-500"
+                    className="px-4 py-10 text-center text-gray-500 text-sm"
                   >
                     Không có bài đăng chờ duyệt.
                   </td>
                 </tr>
               ) : (
-                tableRows.map((j) => (
+                paginatedRows.map((j) => (
                   <tr key={j.JobID} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-semibold text-gray-900">
                       <div className="line-clamp-2">{j.JobTitle}</div>
@@ -230,7 +279,7 @@ const JobApproval = () => {
                           {j.SpecializationName}
                         </span>
                       ) : (
-                        <span className="text-center text-gray-600">—</span>
+                        <span className="text-gray-600 text-center">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-700">
@@ -260,7 +309,7 @@ const JobApproval = () => {
                           onClick={() => openDetail(j.JobID)}
                           className="text-blue-700 hover:text-blue-900"
                         >
-                          <FiEye className="w-4 h-4" />
+                          <FiEye className="h-4 w-4" />
                         </button>
                         <button
                           title="Duyệt"
@@ -272,7 +321,7 @@ const JobApproval = () => {
                               : ""
                           }`}
                         >
-                          <FiCheckCircle className="w-4 h-4" />
+                          <FiCheckCircle className="h-4 w-4" />
                         </button>
                         <button
                           title="Từ chối"
@@ -284,7 +333,7 @@ const JobApproval = () => {
                               : ""
                           }`}
                         >
-                          <FiXCircle className="w-4 h-4" />
+                          <FiXCircle className="h-4 w-4" />
                         </button>
                       </div>
                     </td>
@@ -294,6 +343,62 @@ const JobApproval = () => {
             </tbody>
           </table>
         </div>
+        {tableRows.length > 0 && (
+          <div className="flex flex-row items-center justify-between pt-4 pb-4 border-t border-gray-200">
+            <div className="ml-4 text-sm text-gray-600">
+              Hiển thị{" "}
+              <span className="font-semibold text-gray-900">
+                {(page - 1) * jobsPerPage + 1} -{" "}
+                {Math.min(page * jobsPerPage, tableRows.length)}
+              </span>{" "}
+              kết quả
+            </div>
+            {totalPages > 1 && (
+              <div className="mr-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  <FiChevronLeft className="h-4 w-4" />
+                </button>
+
+                <div className="flex items-center gap-1 flex-wrap justify-center">
+                  {pageItems.map((it, idx) =>
+                    it === "…" ? (
+                      <span key={`dots-${idx}`} className="px-2 text-gray-500">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={`p-${it}`}
+                        type="button"
+                        onClick={() => setPage(Number(it))}
+                        className={`min-w-9 px-3 py-2 rounded-lg border text-sm ${
+                          Number(it) === page
+                            ? "border-blue-200 bg-blue-50 text-blue-700 font-semibold"
+                            : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        {it}
+                      </button>
+                    )
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  <FiChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <AdminJobDetailModal
@@ -317,7 +422,7 @@ const JobApproval = () => {
                   setRejectModal({ isOpen: false, jobId: null, reason: "" })
                 }
               />
-              <div className="relative w-full max-w-lg p-5 bg-white border border-gray-100 shadow-2xl rounded-xl">
+              <div className="relative w-full max-w-lg bg-white rounded-xl shadow-2xl border border-gray-100 p-5">
                 <div className="text-lg font-bold text-gray-900">
                   Lý do từ chối
                 </div>
@@ -331,24 +436,24 @@ const JobApproval = () => {
                     setRejectModal((p) => ({ ...p, reason: e.target.value }))
                   }
                   rows={5}
-                  className="w-full px-3 py-2 mt-4 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-200"
+                  className="mt-4 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-200"
                   placeholder="Nhập lý do từ chối..."
                 />
 
-                <div className="flex items-center justify-end gap-2 mt-4">
+                <div className="mt-4 flex items-center justify-end gap-2">
                   <button
                     type="button"
                     onClick={() =>
                       setRejectModal({ isOpen: false, jobId: null, reason: "" })
                     }
-                    className="px-4 py-2 text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50"
+                    className="px-4 py-2 rounded-lg border border-gray-200 text-gray-700 bg-white hover:bg-gray-50"
                   >
                     Hủy
                   </button>
                   <button
                     type="button"
                     onClick={submitReject}
-                    className="px-4 py-2 font-semibold text-white bg-red-600 rounded-lg hover:bg-red-700"
+                    className="px-4 py-2 rounded-lg bg-red-600 text-white font-semibold hover:bg-red-700"
                   >
                     Từ chối
                   </button>

@@ -8,6 +8,8 @@ import {
   FiXCircle,
   FiFile,
   FiStar,
+  FiChevronLeft,
+  FiChevronRight,
 } from "react-icons/fi";
 import { jobApi } from "../../../api/jobApi";
 import { formatDate } from "../../../utils/formatDate";
@@ -21,6 +23,8 @@ const JobApplicantsModal = ({ open, job, onClose }) => {
   const [data, setData] = useState({ total: 0, applicants: [] });
   const [viewingCvId, setViewingCvId] = useState(null);
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
+  const [page, setPage] = useState(1);
+  const applicantsPerPage = 10;
 
   const load = async (isRefresh = false) => {
     if (!jobId) return;
@@ -48,7 +52,10 @@ const JobApplicantsModal = ({ open, job, onClose }) => {
   };
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setPage(1);
+      return;
+    }
     load(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, jobId]);
@@ -62,6 +69,35 @@ const JobApplicantsModal = ({ open, job, onClose }) => {
       (a, b) => toTime(b?.appliedAt) - toTime(a?.appliedAt)
     );
   }, [data.applicants]);
+
+  const totalPages = useMemo(() => {
+    const n = Math.ceil((sorted?.length || 0) / applicantsPerPage);
+    return Math.max(1, n);
+  }, [sorted, applicantsPerPage]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [totalPages]);
+
+  const paginatedApplicants = useMemo(() => {
+    const start = (page - 1) * applicantsPerPage;
+    return (sorted || []).slice(start, start + applicantsPerPage);
+  }, [sorted, page, applicantsPerPage]);
+
+  const pageItems = useMemo(() => {
+    const tp = totalPages;
+    if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
+    const items = new Set([1, tp, page - 1, page, page + 1]);
+    const arr = Array.from(items)
+      .filter((x) => x >= 1 && x <= tp)
+      .sort((a, b) => a - b);
+    const out = [];
+    for (let i = 0; i < arr.length; i++) {
+      out.push(arr[i]);
+      if (i < arr.length - 1 && arr[i + 1] - arr[i] > 1) out.push("…");
+    }
+    return out;
+  }, [page, totalPages]);
 
   const handleViewCv = async (applicationId, cvUrl) => {
     if (!jobId || !applicationId) return;
@@ -218,7 +254,7 @@ const JobApplicantsModal = ({ open, job, onClose }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {sorted.map((a) => {
+                  {paginatedApplicants.map((a) => {
                     const hasViewedCv = Number(a.currentStatus) >= 1;
                     const isSuitable = Number(a.currentStatus) === 2;
                     const isNotSuitable = Number(a.currentStatus) === 3;
@@ -314,6 +350,65 @@ const JobApplicantsModal = ({ open, job, onClose }) => {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+          {sorted.length > 0 && (
+            <div className="flex flex-row items-center justify-between pt-4 border-t border-gray-200">
+              <div className="ml-4 text-sm text-gray-600">
+                Hiển thị{" "}
+                <span className="font-semibold text-gray-900">
+                  {(page - 1) * applicantsPerPage + 1} -{" "}
+                  {Math.min(page * applicantsPerPage, sorted.length)}
+                </span>{" "}
+                kết quả
+              </div>
+              {totalPages > 1 && (
+                <div className="mr-4 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    <FiChevronLeft className="h-4 w-4" />
+                  </button>
+
+                  <div className="flex items-center gap-1 flex-wrap justify-center">
+                    {pageItems.map((it, idx) =>
+                      it === "…" ? (
+                        <span
+                          key={`dots-${idx}`}
+                          className="px-2 text-gray-500"
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={`p-${it}`}
+                          type="button"
+                          onClick={() => setPage(Number(it))}
+                          className={`min-w-9 px-3 py-2 rounded-lg border text-sm ${
+                            Number(it) === page
+                              ? "border-blue-200 bg-blue-50 text-blue-700 font-semibold"
+                              : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          {it}
+                        </button>
+                      )
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    <FiChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

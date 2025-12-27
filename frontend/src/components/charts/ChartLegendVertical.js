@@ -24,7 +24,7 @@ export default function ChartLegendVertical({
         overflowX: "hidden",
       }}
     >
-      <div className="pr-2 space-y-2">
+      <div className="space-y-2 pr-2">
         {items.map((it, idx) => {
           const name = it?.value ?? it?.payload?.name ?? "";
           const rawVal =
@@ -37,7 +37,7 @@ export default function ChartLegendVertical({
           return (
             <div key={idx} className="flex items-start gap-2 text-sm">
               <span
-                className="inline-block w-3 h-3 mt-1 rounded-sm shrink-0"
+                className="mt-1 inline-block h-3 w-3 rounded-sm shrink-0"
                 style={{ background: it?.color || "#94a3b8" }}
               />
               <div className="min-w-0">

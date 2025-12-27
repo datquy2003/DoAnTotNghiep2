@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
 import toast from "react-hot-toast";
-import { FiEye, FiRefreshCw } from "react-icons/fi";
+import {
+  FiEye,
+  FiRefreshCw,
+  FiChevronLeft,
+  FiChevronRight,
+} from "react-icons/fi";
 import { adminApi } from "../../api/adminApi";
 import { renderSalary } from "../../utils/renderSalary";
 import { formatDate } from "../../utils/formatDate";
@@ -15,6 +20,8 @@ const JobManagement = () => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [jobDetail, setJobDetail] = useState(null);
+  const [page, setPage] = useState(1);
+  const jobsPerPage = 10;
 
   const loadActiveJobs = async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -58,6 +65,35 @@ const JobManagement = () => {
 
   const rows = useMemo(() => jobs, [jobs]);
 
+  const totalPages = useMemo(() => {
+    const n = Math.ceil((rows?.length || 0) / jobsPerPage);
+    return Math.max(1, n);
+  }, [rows, jobsPerPage]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [totalPages]);
+
+  const paginatedRows = useMemo(() => {
+    const start = (page - 1) * jobsPerPage;
+    return (rows || []).slice(start, start + jobsPerPage);
+  }, [rows, page, jobsPerPage]);
+
+  const pageItems = useMemo(() => {
+    const tp = totalPages;
+    if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
+    const items = new Set([1, tp, page - 1, page, page + 1]);
+    const arr = Array.from(items)
+      .filter((x) => x >= 1 && x <= tp)
+      .sort((a, b) => a - b);
+    const out = [];
+    for (let i = 0; i < arr.length; i++) {
+      out.push(arr[i]);
+      if (i < arr.length - 1 && arr[i + 1] - arr[i] > 1) out.push("…");
+    }
+    return out;
+  }, [page, totalPages]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -75,7 +111,7 @@ const JobManagement = () => {
           type="button"
           onClick={() => loadActiveJobs(true)}
           disabled={loading || refreshing}
-          className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-60"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-60"
         >
           <FiRefreshCw
             className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
@@ -84,30 +120,30 @@ const JobManagement = () => {
         </button>
       </div>
 
-      <div className="overflow-hidden bg-white border border-gray-100 shadow-sm rounded-xl">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Tiêu đề
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Công ty
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Mức lương
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Chuyên môn
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Ngày tạo
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Hết hạn
                 </th>
-                <th className="px-4 py-3 text-xs font-semibold tracking-wider text-left text-gray-600 uppercase">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Chi tiết
                 </th>
               </tr>
@@ -117,7 +153,7 @@ const JobManagement = () => {
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-4 py-10 text-sm text-center text-gray-500"
+                    className="px-4 py-10 text-center text-gray-500 text-sm"
                   >
                     Đang tải...
                   </td>
@@ -126,13 +162,13 @@ const JobManagement = () => {
                 <tr>
                   <td
                     colSpan={7}
-                    className="px-4 py-10 text-sm text-center text-gray-500"
+                    className="px-4 py-10 text-center text-gray-500 text-sm"
                   >
                     Không có bài nào đang tuyển.
                   </td>
                 </tr>
               ) : (
-                rows.map((j) => (
+                paginatedRows.map((j) => (
                   <tr key={j.JobID} className="hover:bg-gray-50">
                     <td className="px-4 py-3 text-sm font-semibold text-gray-900">
                       <div className="line-clamp-2">{j.JobTitle}</div>
@@ -164,7 +200,7 @@ const JobManagement = () => {
                         onClick={() => openDetail(j.JobID)}
                         className="text-blue-700 hover:text-blue-900"
                       >
-                        <FiEye className="w-4 h-4" />
+                        <FiEye className="h-4 w-4" />
                       </button>
                     </td>
                   </tr>
@@ -173,6 +209,62 @@ const JobManagement = () => {
             </tbody>
           </table>
         </div>
+        {rows.length > 0 && (
+          <div className="flex flex-row items-center justify-between pt-4 pb-4 border-t border-gray-200">
+            <div className="ml-4 text-sm text-gray-600">
+              Hiển thị{" "}
+              <span className="font-semibold text-gray-900">
+                {(page - 1) * jobsPerPage + 1} -{" "}
+                {Math.min(page * jobsPerPage, rows.length)}
+              </span>{" "}
+              kết quả
+            </div>
+            {totalPages > 1 && (
+              <div className="mr-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  <FiChevronLeft className="h-4 w-4" />
+                </button>
+
+                <div className="flex items-center gap-1 flex-wrap justify-center">
+                  {pageItems.map((it, idx) =>
+                    it === "…" ? (
+                      <span key={`dots-${idx}`} className="px-2 text-gray-500">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={`p-${it}`}
+                        type="button"
+                        onClick={() => setPage(Number(it))}
+                        className={`min-w-9 px-3 py-2 rounded-lg border text-sm ${
+                          Number(it) === page
+                            ? "border-blue-200 bg-blue-50 text-blue-700 font-semibold"
+                            : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                        }`}
+                      >
+                        {it}
+                      </button>
+                    )
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  <FiChevronRight className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <AdminJobDetailModal

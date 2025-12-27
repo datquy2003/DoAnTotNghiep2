@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -14,6 +14,8 @@ import {
   FiClock,
   FiStar,
   FiCalendar,
+  FiChevronLeft,
+  FiChevronRight,
 } from "react-icons/fi";
 import { useAuth } from "../context/AuthContext";
 import { renderSalary } from "../utils/renderSalary";
@@ -52,6 +54,43 @@ const JobDetail = () => {
   const [applicantList, setApplicantList] = useState([]);
   const [loadingApplicantList, setLoadingApplicantList] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
+  const [applicantPage, setApplicantPage] = useState(1);
+  const applicantsPerPage = 10;
+
+  const totalApplicantPages = useMemo(() => {
+    const n = Math.ceil((applicantList?.length || 0) / applicantsPerPage);
+    return Math.max(1, n);
+  }, [applicantList, applicantsPerPage]);
+
+  useEffect(() => {
+    setApplicantPage((p) => Math.min(Math.max(1, p), totalApplicantPages));
+  }, [totalApplicantPages]);
+
+  const paginatedApplicants = useMemo(() => {
+    const start = (applicantPage - 1) * applicantsPerPage;
+    return (applicantList || []).slice(start, start + applicantsPerPage);
+  }, [applicantList, applicantPage, applicantsPerPage]);
+
+  const applicantPageItems = useMemo(() => {
+    const tp = totalApplicantPages;
+    if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
+    const items = new Set([
+      1,
+      tp,
+      applicantPage - 1,
+      applicantPage,
+      applicantPage + 1,
+    ]);
+    const arr = Array.from(items)
+      .filter((x) => x >= 1 && x <= tp)
+      .sort((a, b) => a - b);
+    const out = [];
+    for (let i = 0; i < arr.length; i++) {
+      out.push(arr[i]);
+      if (i < arr.length - 1 && arr[i + 1] - arr[i] > 1) out.push("…");
+    }
+    return out;
+  }, [applicantPage, totalApplicantPages]);
 
   useEffect(() => {
     if (!job?.ExpiresAt) return;
@@ -852,7 +891,10 @@ const JobDetail = () => {
                   </h3>
                   <button
                     className="text-gray-500 hover:text-gray-700"
-                    onClick={() => setIsApplicantListModalOpen(false)}
+                    onClick={() => {
+                      setIsApplicantListModalOpen(false);
+                      setApplicantPage(1);
+                    }}
                   >
                     ✕
                   </button>
@@ -876,7 +918,7 @@ const JobDetail = () => {
                         viên
                       </p>
                       <div className="space-y-2">
-                        {applicantList.map((applicant, idx) => (
+                        {paginatedApplicants.map((applicant, idx) => (
                           <div
                             key={idx}
                             className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50"
@@ -902,6 +944,76 @@ const JobDetail = () => {
                           </div>
                         ))}
                       </div>
+                      {applicantList.length > 0 && (
+                        <div className="flex flex-row items-center justify-between pt-4 border-t border-gray-200">
+                          <div className="ml-4 text-sm text-gray-600">
+                            Hiển thị{" "}
+                            <span className="font-semibold text-gray-900">
+                              {(applicantPage - 1) * applicantsPerPage + 1} -{" "}
+                              {Math.min(
+                                applicantPage * applicantsPerPage,
+                                applicantList.length
+                              )}
+                            </span>{" "}
+                            kết quả
+                          </div>
+                          {totalApplicantPages > 1 && (
+                            <div className="mr-4 flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setApplicantPage((p) => Math.max(1, p - 1))
+                                }
+                                disabled={applicantPage <= 1}
+                                className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                              >
+                                <FiChevronLeft className="h-4 w-4" />
+                              </button>
+
+                              <div className="flex items-center gap-1 flex-wrap justify-center">
+                                {applicantPageItems.map((it, idx) =>
+                                  it === "…" ? (
+                                    <span
+                                      key={`dots-${idx}`}
+                                      className="px-2 text-gray-500"
+                                    >
+                                      …
+                                    </span>
+                                  ) : (
+                                    <button
+                                      key={`p-${it}`}
+                                      type="button"
+                                      onClick={() =>
+                                        setApplicantPage(Number(it))
+                                      }
+                                      className={`min-w-9 px-3 py-2 rounded-lg border text-sm ${
+                                        Number(it) === applicantPage
+                                          ? "border-blue-200 bg-blue-50 text-blue-700 font-semibold"
+                                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                                      }`}
+                                    >
+                                      {it}
+                                    </button>
+                                  )
+                                )}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setApplicantPage((p) =>
+                                    Math.min(totalApplicantPages, p + 1)
+                                  )
+                                }
+                                disabled={applicantPage >= totalApplicantPages}
+                                className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                              >
+                                <FiChevronRight className="h-4 w-4" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

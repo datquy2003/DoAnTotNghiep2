@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { vipApi } from "../../api/vipApi";
 import {
-  FiPackage,
   FiPlus,
   FiEdit2,
   FiTrash2,
@@ -12,6 +11,8 @@ import {
   FiClock,
   FiZap,
   FiCheck,
+  FiChevronLeft,
+  FiChevronRight,
 } from "react-icons/fi";
 import toast from "react-hot-toast";
 import ConfirmationModal from "../../components/modals/ConfirmationModal";
@@ -302,8 +303,8 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-50 p-4 backdrop-blur-sm !mt-0">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg animate-fadeIn flex flex-col max-h-[90vh]">
-        <div className="flex items-center justify-between flex-shrink-0 px-6 py-4 border-b bg-gray-50">
-          <h3 className="flex items-center text-lg font-bold text-gray-800">
+        <div className="px-6 py-4 border-b bg-gray-50 flex justify-between items-center flex-shrink-0">
+          <h3 className="text-lg font-bold text-gray-800 flex items-center">
             {pkgToEdit ? "Cập nhật Gói/Dịch vụ" : "Thêm Gói/Dịch vụ Mới"}
           </h3>
           <button onClick={onClose}>
@@ -311,7 +312,7 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
           </button>
         </div>
 
-        <div className="p-6 overflow-y-auto">
+        <div className="overflow-y-auto p-6">
           <form id="vipForm" onSubmit={handleSubmit} className="space-y-5">
             <div className="grid grid-cols-2 gap-2 p-1 bg-gray-100 rounded-lg">
               <button
@@ -346,7 +347,7 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2">
-                <label className="block mb-1 text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Tên gói / Dịch vụ
                 </label>
                 <input
@@ -362,28 +363,28 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
                 />
               </div>
               <div className={mode === "SUBSCRIPTION" ? "" : "col-span-2"}>
-                <label className="block mb-1 text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Giá (VNĐ)
                 </label>
                 <input
                   type="text"
                   name="Price"
                   required
-                  className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                   value={formData.Price}
                   onChange={handleChange}
                 />
               </div>
               {mode === "SUBSCRIPTION" && (
                 <div>
-                  <label className="block mb-1 text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Hạn (Ngày)
                   </label>
                   <input
                     type="number"
                     name="DurationInDays"
                     required
-                    className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                     value={formData.DurationInDays}
                     onChange={handleChange}
                   />
@@ -392,7 +393,7 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
             </div>
 
             {mode === "ONE_TIME" && (
-              <div className="p-4 border border-purple-200 rounded-lg bg-purple-50">
+              <div className="rounded-lg border border-purple-200 bg-purple-50 p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-bold text-purple-800">
                     Chọn tính năng mua 1 lần
@@ -423,12 +424,12 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
                               <p className="text-sm font-semibold text-gray-900">
                                 {feature.title}
                               </p>
-                              <p className="mt-1 text-xs text-gray-600">
+                              <p className="text-xs text-gray-600 mt-1">
                                 {feature.description}
                               </p>
                             </div>
                             {isSelected && (
-                              <FiCheck className="mt-1 text-purple-600" />
+                              <FiCheck className="text-purple-600 mt-1" />
                             )}
                           </div>
                         </button>
@@ -444,20 +445,20 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
             )}
 
             {mode === "SUBSCRIPTION" && (
-              <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
-                <h4 className="pb-2 mb-3 text-sm font-bold text-gray-800 border-b">
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h4 className="text-sm font-bold text-gray-800 mb-3 border-b pb-2">
                   Cấu hình giới hạn
                 </h4>
 
                 {isEmployer && (
                   <div className="mb-3">
-                    <label className="block mb-1 text-xs font-medium text-gray-600">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
                       Số bài đăng / ngày
                     </label>
                     <input
                       type="number"
                       name="Limit_JobPostDaily"
-                      className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-blue-500"
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-blue-500"
                       value={formData.Limit_JobPostDaily}
                       onChange={handleChange}
                     />
@@ -466,13 +467,13 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
 
                 {!isEmployer && (
                   <div className="mb-3">
-                    <label className="block mb-1 text-xs font-medium text-gray-600">
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
                       Lưu trữ tối đa CV
                     </label>
                     <input
                       type="number"
                       name="Limit_CVStorage"
-                      className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-blue-500"
+                      className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-blue-500"
                       value={formData.Limit_CVStorage}
                       onChange={handleChange}
                     />
@@ -480,13 +481,13 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
                 )}
 
                 <div>
-                  <label className="block mb-1 text-xs font-medium text-gray-600">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
                     Số lần Đẩy Top / ngày
                   </label>
                   <input
                     type="number"
                     name="Limit_PushTopDaily"
-                    className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-blue-500"
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-blue-500"
                     value={formData.Limit_PushTopDaily}
                     onChange={handleChange}
                   />
@@ -495,7 +496,7 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
             )}
 
             <div>
-              <label className="block mb-1 text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Mô tả hiển thị
               </label>
               <textarea
@@ -513,7 +514,7 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
                 onChange={handleChange}
               ></textarea>
               {mode !== "SUBSCRIPTION" && !isEditingOneTime && (
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="text-xs text-gray-500 mt-1">
                   Xuống dòng để tạo gạch đầu dòng.
                 </p>
               )}
@@ -521,10 +522,10 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
           </form>
         </div>
 
-        <div className="flex justify-end flex-shrink-0 gap-2 px-6 py-4 border-t bg-gray-50">
+        <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-2 flex-shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+            className="px-4 py-2 bg-gray-100 rounded-lg text-gray-700 hover:bg-gray-200 font-medium"
           >
             Hủy
           </button>
@@ -532,7 +533,7 @@ const VipPackageModal = ({ pkgToEdit, roleId, onClose, onSuccess }) => {
             form="vipForm"
             type="submit"
             disabled={loading}
-            className="px-4 py-2 font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
           >
             {loading ? "Đang lưu..." : "Lưu lại"}
           </button>
@@ -548,6 +549,8 @@ const VipManagement = () => {
   // eslint-disable-next-line no-unused-vars
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [page, setPage] = useState(1);
+  const packagesPerPage = 5;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPkg, setEditingPkg] = useState(null);
   const [confirmModal, setConfirmModal] = useState({ isOpen: false });
@@ -557,6 +560,7 @@ const VipManagement = () => {
     try {
       const res = await vipApi.getVipPackages(activeTab);
       setPackages(res.data || []);
+      setPage(1);
     } catch (error) {
       if (error.response?.status !== 404) toast.error("Lỗi kết nối server.");
       setPackages([]);
@@ -595,34 +599,68 @@ const VipManagement = () => {
     });
   };
 
-  const filteredPackages = packages.filter((pkg) =>
-    pkg.PlanName?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredPackages = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return packages.filter((pkg) => pkg.PlanName?.toLowerCase().includes(term));
+  }, [packages, searchTerm]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, activeTab]);
+
+  const totalPages = useMemo(() => {
+    const n = Math.ceil((filteredPackages?.length || 0) / packagesPerPage);
+    return Math.max(1, n);
+  }, [filteredPackages, packagesPerPage]);
+
+  useEffect(() => {
+    setPage((p) => Math.min(Math.max(1, p), totalPages));
+  }, [totalPages]);
+
+  const paginatedPackages = useMemo(() => {
+    const start = (page - 1) * packagesPerPage;
+    return (filteredPackages || []).slice(start, start + packagesPerPage);
+  }, [filteredPackages, page, packagesPerPage]);
+
+  const pageItems = useMemo(() => {
+    const tp = totalPages;
+    if (tp <= 7) return Array.from({ length: tp }, (_, i) => i + 1);
+    const items = new Set([1, tp, page - 1, page, page + 1]);
+    const arr = Array.from(items)
+      .filter((x) => x >= 1 && x <= tp)
+      .sort((a, b) => a - b);
+    const out = [];
+    for (let i = 0; i < arr.length; i++) {
+      out.push(arr[i]);
+      if (i < arr.length - 1 && arr[i + 1] - arr[i] > 1) out.push("…");
+    }
+    return out;
+  }, [page, totalPages]);
 
   return (
     <>
       <div className="space-y-6">
-        <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
-          <h1 className="flex items-center text-2xl font-bold text-gray-800">
-            <FiPackage className="mr-2 text-blue-600" /> Quản lý Gói & Dịch Vụ
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <h1 className="text-2xl font-bold text-gray-800 flex items-center">
+            Quản lý Gói & Dịch Vụ
           </h1>
-          <div className="flex items-center w-full gap-4 md:w-auto">
+          <div className="flex items-center gap-4 w-full md:w-auto">
             <div className="relative w-full md:w-64">
               <input
                 type="text"
                 placeholder="Tìm kiếm..."
-                className="w-full py-2 pl-10 pr-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
-              <FiSearch className="absolute text-gray-400 left-3 top-3" />
+              <FiSearch className="absolute left-3 top-3 text-gray-400" />
             </div>
             <button
               onClick={() => {
                 setEditingPkg(null);
                 setIsModalOpen(true);
               }}
-              className="flex items-center px-4 py-2 text-white bg-blue-600 rounded-lg shadow-sm whitespace-nowrap"
+              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg shadow-sm whitespace-nowrap"
             >
               <FiPlus className="mr-2" /> Thêm Mới
             </button>
@@ -652,42 +690,42 @@ const VipManagement = () => {
           </button>
         </div>
 
-        <div className="overflow-hidden bg-white border border-gray-200 rounded-lg shadow">
+        <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-xs font-medium text-left text-gray-500 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Tên Gói / Dịch vụ
                   </th>
-                  <th className="px-6 py-3 text-xs font-medium text-left text-gray-500 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Loại
                   </th>
-                  <th className="px-6 py-3 text-xs font-medium text-left text-gray-500 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                     Giá
                   </th>
-                  <th className="px-6 py-3 text-xs font-medium text-center text-gray-500 uppercase">
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">
                     Thời hạn
                   </th>
-                  <th className="w-1/3 px-6 py-3 text-xs font-medium text-left text-gray-500 uppercase">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase w-1/3">
                     Mô tả
                   </th>
-                  <th className="px-6 py-3 text-xs font-medium text-right text-gray-500 uppercase">
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
                     Hành động
                   </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {filteredPackages.length > 0 ? (
-                  filteredPackages.map((pkg) => (
+                {paginatedPackages.length > 0 ? (
+                  paginatedPackages.map((pkg) => (
                     <tr
                       key={pkg.PlanID}
-                      className="transition-colors hover:bg-gray-50"
+                      className="hover:bg-gray-50 transition-colors"
                     >
-                      <td className="px-6 py-4 font-medium whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap font-medium">
                         {pkg.PlanName}
                       </td>
-                      <td className="px-6 py-4 text-sm whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
                         {pkg.PlanType === "SUBSCRIPTION" ? (
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                             <FiClock className="mr-1" /> Định kỳ
@@ -698,10 +736,10 @@ const VipManagement = () => {
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4 font-medium text-green-600 whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap text-green-600 font-medium">
                         {formatCurrency(pkg.Price)}
                       </td>
-                      <td className="px-6 py-4 text-sm text-center text-gray-600 whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600">
                         {pkg.DurationInDays
                           ? pkg.DurationInDays + " ngày"
                           : "-"}
@@ -709,13 +747,13 @@ const VipManagement = () => {
                       <td className="px-6 py-4 text-sm text-gray-500 whitespace-pre-line">
                         {pkg.Features}
                       </td>
-                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
                         <button
                           onClick={() => {
                             setEditingPkg(pkg);
                             setIsModalOpen(true);
                           }}
-                          className="mr-3 text-blue-600"
+                          className="text-blue-600 mr-3"
                         >
                           <FiEdit2 size={18} />
                         </button>
@@ -741,6 +779,65 @@ const VipManagement = () => {
               </tbody>
             </table>
           </div>
+          {filteredPackages.length > 0 && (
+            <div className="flex flex-row items-center justify-between pt-4 pb-4 border-t border-gray-200">
+              <div className="ml-4 text-sm text-gray-600">
+                Hiển thị{" "}
+                <span className="font-semibold text-gray-900">
+                  {(page - 1) * packagesPerPage + 1} -{" "}
+                  {Math.min(page * packagesPerPage, filteredPackages.length)}
+                </span>{" "}
+                trong tổng số {filteredPackages.length} kết quả
+              </div>
+              {totalPages > 1 && (
+                <div className="mr-4 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    <FiChevronLeft className="h-4 w-4" />
+                  </button>
+
+                  <div className="flex items-center gap-1 flex-wrap justify-center">
+                    {pageItems.map((it, idx) =>
+                      it === "…" ? (
+                        <span
+                          key={`dots-${idx}`}
+                          className="px-2 text-gray-500"
+                        >
+                          …
+                        </span>
+                      ) : (
+                        <button
+                          key={`p-${it}`}
+                          type="button"
+                          onClick={() => setPage(Number(it))}
+                          className={`min-w-9 px-3 py-2 rounded-lg border text-sm ${
+                            Number(it) === page
+                              ? "border-blue-200 bg-blue-50 text-blue-700 font-semibold"
+                              : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          {it}
+                        </button>
+                      )
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page >= totalPages}
+                    className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                  >
+                    <FiChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
