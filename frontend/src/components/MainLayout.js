@@ -2,8 +2,11 @@ import React from "react";
 import { Outlet } from "react-router-dom";
 import Header from "./Header";
 import { Toaster } from "react-hot-toast";
+import { useRouteValidation } from "../hooks/useRouteValidation";
 
 const MainLayout = () => {
+  useRouteValidation();
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Toaster position="top-right" containerStyle={{ zIndex: 100000 }} />
