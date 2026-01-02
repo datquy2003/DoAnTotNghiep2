@@ -17,6 +17,7 @@ import {
 import toast from "react-hot-toast";
 import { jobApi } from "../../api/jobApi";
 import { categoryApi } from "../../api/categoryApi";
+import { notificationApi } from "../../api/notificationApi";
 import { renderSalary } from "../../utils/renderSalary";
 import { STATUS_CONFIG } from "../../constants/statusConfig";
 import { EXPERIENCE_AMOUNT } from "../../constants/experienceAmount";
@@ -381,6 +382,7 @@ const JobPostsManagement = () => {
       const res = await jobApi.closeJob(jobId);
       toast.success(res?.data?.message || "Đóng bài tuyển dụng thành công.");
       await loadJobs();
+      notificationApi.triggerRefresh();
     } catch (error) {
       console.error("Lỗi đóng bài:", error);
       const message =
@@ -396,6 +398,7 @@ const JobPostsManagement = () => {
       const res = await jobApi.reopenJob(jobId);
       toast.success(res?.data?.message || "Mở lại bài tuyển dụng thành công.");
       await loadJobs();
+      notificationApi.triggerRefresh();
     } catch (error) {
       console.error("Lỗi mở lại bài:", error);
       const message =

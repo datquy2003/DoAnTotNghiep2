@@ -3,6 +3,7 @@ import sql from "mssql";
 import { sqlConfig } from "../config/db.js";
 import { checkAuth } from "../middleware/authMiddleware.js";
 import admin from "../config/firebaseAdmin.js";
+import { createJobStatusChangeNotification } from "../services/notificationService.js";
 
 const router = express.Router();
 
@@ -1255,6 +1256,25 @@ router.patch(
 
     try {
       const pool = await sql.connect(sqlConfig);
+
+      const jobRes = await pool.request().input("JobID", sql.Int, Number(id))
+        .query(`
+          SELECT TOP 1 j.JobID, j.JobTitle, j.Status, c.OwnerUserID AS EmployerUserID
+          FROM Jobs j
+          JOIN Companies c ON j.CompanyID = c.CompanyID
+          WHERE j.JobID = @JobID AND j.Status IN (0, 5)
+        `);
+
+      const job = jobRes.recordset?.[0];
+      if (!job) {
+        return res.status(400).json({
+          message: "Không tìm thấy bài đăng hoặc không ở trạng thái chờ duyệt.",
+        });
+      }
+
+      const oldStatus = Number(job.Status);
+      const newStatus = 1;
+
       const updateRes = await pool
         .request()
         .input("JobID", sql.Int, Number(id))
@@ -1276,6 +1296,18 @@ router.patch(
             "Không thể duyệt (bài có thể đã được xử lý hoặc không ở trạng thái chờ duyệt).",
         });
       }
+
+      try {
+        await createJobStatusChangeNotification(
+          job.EmployerUserID,
+          job,
+          oldStatus,
+          newStatus
+        );
+      } catch (notifError) {
+        console.error("Error creating job approval notification:", notifError);
+      }
+
       return res.status(200).json({ message: "Đã duyệt bài đăng." });
     } catch (error) {
       console.error("Lỗi duyệt bài đăng:", error);
@@ -1300,6 +1332,25 @@ router.patch(
 
     try {
       const pool = await sql.connect(sqlConfig);
+
+      const jobRes = await pool.request().input("JobID", sql.Int, Number(id))
+        .query(`
+          SELECT TOP 1 j.JobID, j.JobTitle, j.Status, c.OwnerUserID AS EmployerUserID
+          FROM Jobs j
+          JOIN Companies c ON j.CompanyID = c.CompanyID
+          WHERE j.JobID = @JobID AND j.Status IN (0, 5)
+        `);
+
+      const job = jobRes.recordset?.[0];
+      if (!job) {
+        return res.status(400).json({
+          message: "Không tìm thấy bài đăng hoặc không ở trạng thái chờ duyệt.",
+        });
+      }
+
+      const oldStatus = Number(job.Status);
+      const newStatus = 4;
+
       const updateRes = await pool
         .request()
         .input("JobID", sql.Int, Number(id))
@@ -1321,6 +1372,18 @@ router.patch(
             "Không thể từ chối (bài có thể đã được xử lý hoặc không ở trạng thái chờ duyệt).",
         });
       }
+
+      try {
+        await createJobStatusChangeNotification(
+          job.EmployerUserID,
+          job,
+          oldStatus,
+          newStatus
+        );
+      } catch (notifError) {
+        console.error("Error creating job rejection notification:", notifError);
+      }
+
       return res.status(200).json({ message: "Đã từ chối bài đăng." });
     } catch (error) {
       console.error("Lỗi từ chối bài đăng:", error);

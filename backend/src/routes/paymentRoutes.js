@@ -4,39 +4,16 @@ import sql from "mssql";
 import { sqlConfig } from "../config/db.js";
 import { checkAuth } from "../middleware/authMiddleware.js";
 import { enforceCandidateCvLimit } from "../services/cvStorageService.js";
-
-const NOTIF_TYPE_ONE_TIME = "VIP_ONE_TIME_PURCHASE";
-const formatCurrencyVN = (value) =>
-  new Intl.NumberFormat("vi-VN").format(Number(value) || 0);
-
-const getVipLinkByRole = (roleId) =>
-  roleId === 3 ? "/employer/subscription" : "/candidate/subscription";
+import { createVipPurchaseNotification } from "../services/notificationService.js";
 
 const getRedirectForPlan = (plan) => {
   if (plan.PlanType === "ONE_TIME") {
     if (plan.RoleID === 3) return "/employer/applicants";
     if (plan.RoleID === 4) return "/candidate/cvs";
   }
-  return getVipLinkByRole(plan.RoleID);
-};
-
-const buildOneTimeMessage = (plan, amount, metadata = {}) => {
-  const money = formatCurrencyVN(amount) + "₫";
-  if (plan.RoleID === 4) {
-    let extra = "";
-    if (metadata?.jobTitle) {
-      extra = ` vào công việc "${metadata.jobTitle}"`;
-    }
-    return `Bạn đã trả ${money} để sử dụng tính năng "${plan.PlanName}" nhằm xem thống kê ứng tuyển${extra}.`;
-  }
-  if (plan.RoleID === 3) {
-    let extra = "";
-    if (metadata?.candidateName) {
-      extra = ` của ứng viên "${metadata.candidateName}"`;
-    }
-    return `Bạn đã trả ${money} để sử dụng tính năng "${plan.PlanName}" nhằm xem liên hệ ứng viên${extra}.`;
-  }
-  return `Bạn đã trả ${money} để sử dụng dịch vụ "${plan.PlanName}".`;
+  return plan.RoleID === 3
+    ? "/employer/subscription"
+    : "/candidate/subscription";
 };
 
 const router = express.Router();
@@ -216,26 +193,6 @@ router.post("/verify-payment", checkAuth, async (req, res) => {
       const referenceId = metadata.jobId || metadata.candidateId || null;
 
       if (plan.PlanType === "ONE_TIME" || !plan.DurationInDays) {
-        if (featureKey !== "CANDIDATE_COMPETITOR_INSIGHT") {
-          await transaction
-            .request()
-            .input("UserID", sql.NVarChar, userId)
-            .input(
-              "Message",
-              sql.NVarChar,
-              buildOneTimeMessage(plan, plan.Price, metadata)
-            )
-            .input("LinkURL", sql.NVarChar, getRedirectForPlan(plan))
-            .input("Type", sql.NVarChar, NOTIF_TYPE_ONE_TIME)
-            .input("ReferenceID", sql.NVarChar, plan.PlanID.toString())
-            .query(
-              `
-              INSERT INTO Notifications (UserID, Message, LinkURL, Type, ReferenceID)
-              VALUES (@UserID, @Message, @LinkURL, @Type, @ReferenceID)
-            `
-            );
-        }
-
         if (featureKey && referenceId && subscriptionId) {
           const existingUsage = await transaction
             .request()
@@ -284,21 +241,6 @@ router.post("/verify-payment", checkAuth, async (req, res) => {
                   jobTitle = "công việc";
                 }
               }
-
-              const money = formatCurrencyVN(plan.Price) + "₫";
-              const message = `Bạn đã trả ${money} để xem danh sách ứng viên đã ứng tuyển vào công việc "${jobTitle}".`;
-              const linkUrl = `/jobs/${metadata.jobId}`;
-
-              await transaction
-                .request()
-                .input("UserID", sql.NVarChar, userId)
-                .input("Message", sql.NVarChar, message)
-                .input("LinkURL", sql.NVarChar, linkUrl)
-                .input("Type", sql.NVarChar, NOTIF_TYPE_ONE_TIME)
-                .input("ReferenceID", sql.NVarChar, metadata.jobId).query(`
-                  INSERT INTO Notifications (UserID, Message, LinkURL, Type, ReferenceID)
-                  VALUES (@UserID, @Message, @LinkURL, @Type, @ReferenceID)
-                `);
             }
           }
         }
@@ -313,6 +255,12 @@ router.post("/verify-payment", checkAuth, async (req, res) => {
       }
 
       await transaction.commit();
+
+      try {
+        await createVipPurchaseNotification(userId, plan, metadata);
+      } catch (notifError) {
+        console.error("Error creating VIP purchase notification:", notifError);
+      }
 
       res.status(200).json({
         message: "Kích hoạt thành công!",

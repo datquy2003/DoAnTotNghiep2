@@ -2,8 +2,64 @@ import express from "express";
 import sql from "mssql";
 import { sqlConfig } from "../config/db.js";
 import { checkAuth } from "../middleware/authMiddleware.js";
+import { setBroadcastFunction } from "../services/notificationService.js";
+import admin from "../config/firebaseAdmin.js";
+
+const sseClients = new Map();
+
+const broadcastNotification = (notification) => {
+  const client = sseClients.get(notification.UserID);
+  if (client) {
+    try {
+      client.res.write(`data: ${JSON.stringify(notification)}\n\n`);
+    } catch (error) {
+      console.error("Error broadcasting SSE notification:", error);
+      sseClients.delete(notification.UserID);
+    }
+  }
+};
+
+setBroadcastFunction(broadcastNotification);
 
 const router = express.Router();
+
+router.get("/stream", async (req, res) => {
+  try {
+    const token = req.query.token;
+    if (!token) {
+      return res.status(401).json({ message: "Token required" });
+    }
+
+    const decodedToken = await admin.auth().verifyIdToken(token);
+    const userId = decodedToken.uid;
+
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Headers": "Cache-Control",
+    });
+
+    res.write("data: connected\n\n");
+
+    const client = { res, userId };
+    sseClients.set(userId, client);
+
+    req.on("close", () => {
+      sseClients.delete(userId);
+    });
+
+    req.on("error", () => {
+      sseClients.delete(userId);
+    });
+  } catch (error) {
+    console.error("SSE authentication error:", error);
+    if (!res.headersSent) {
+      res.status(401).json({ message: "Authentication failed" });
+    }
+  }
+});
 
 router.get("/", checkAuth, async (req, res) => {
   const userId = req.firebaseUser.uid;

@@ -12,8 +12,13 @@ const markAllRead = () => {
   return apiClient.post("/notifications/mark-all-read");
 };
 
+const triggerRefresh = () => {
+  window.dispatchEvent(new CustomEvent("refreshNotifications"));
+};
+
 export const notificationApi = {
   getNotifications,
   markAsRead,
   markAllRead,
+  triggerRefresh,
 };

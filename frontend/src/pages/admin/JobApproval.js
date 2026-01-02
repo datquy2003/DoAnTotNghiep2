@@ -10,6 +10,7 @@ import {
   FiChevronRight,
 } from "react-icons/fi";
 import { adminApi } from "../../api/adminApi";
+import { notificationApi } from "../../api/notificationApi";
 import { formatDate } from "../../utils/formatDate";
 import { renderSalary } from "../../utils/renderSalary";
 import { formatDateOnly } from "../../utils/formatDateOnly";
@@ -106,6 +107,7 @@ const JobApproval = () => {
             setSelectedJobId(null);
             setJobDetail(null);
           }
+          notificationApi.triggerRefresh();
         } catch (error) {
           console.error("Lỗi duyệt job:", error);
           toast.error(
@@ -146,6 +148,7 @@ const JobApproval = () => {
         setSelectedJobId(null);
         setJobDetail(null);
       }
+      notificationApi.triggerRefresh();
     } catch (error) {
       console.error("Lỗi reject job:", error);
       toast.error(

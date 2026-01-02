@@ -5,6 +5,12 @@ import { sqlConfig } from "../config/db.js";
 import { checkAuth } from "../middleware/authMiddleware.js";
 import { getMondayOfWeek } from "../config/getMondayOfWeek.js";
 import { DEFAULT_LIMITS } from "../config/limitConstants.js";
+import {
+  createJobStatusChangeNotification,
+  createCandidateAppliedNotification,
+  createApplicationStatusChangeNotification,
+  createApplicationSubmittedNotification,
+} from "../services/notificationService.js";
 
 const router = express.Router();
 
@@ -612,9 +618,10 @@ router.post("/:id/apply", checkAuth, async (req, res) => {
     }
 
     const jobRes = await pool.request().input("JobID", sql.Int, jobId).query(`
-      SELECT TOP 1 JobID, Status, ExpiresAt
-      FROM Jobs
-      WHERE JobID = @JobID
+      SELECT TOP 1 j.JobID, j.Status, j.ExpiresAt, j.JobTitle, c.OwnerUserID AS EmployerUserID
+      FROM Jobs j
+      JOIN Companies c ON j.CompanyID = c.CompanyID
+      WHERE j.JobID = @JobID
     `);
     const job = jobRes.recordset?.[0];
     if (!job) {
@@ -679,7 +686,7 @@ router.post("/:id/apply", checkAuth, async (req, res) => {
         .json({ message: "Bạn đã ứng tuyển vào công việc này rồi." });
     }
 
-    await pool
+    const applicationResult = await pool
       .request()
       .input("JobID", sql.Int, jobId)
       .input("CandidateID", sql.NVarChar, candidateId)
@@ -689,9 +696,51 @@ router.post("/:id/apply", checkAuth, async (req, res) => {
       .query(
         `
         INSERT INTO Applications (JobID, CandidateID, CVID, Snapshot_CVFileUrl, Snapshot_CVName, AppliedAt, CurrentStatus, StatusUpdatedAt)
-        VALUES (@JobID, @CandidateID, @CVID, @Snapshot_CVFileUrl, @Snapshot_CVName, GETDATE(), 0, GETDATE())
+        VALUES (@JobID, @CandidateID, @CVID, @Snapshot_CVFileUrl, @Snapshot_CVName, GETDATE(), 0, GETDATE());
+        SELECT SCOPE_IDENTITY() AS ApplicationID;
         `
       );
+
+    const applicationId = applicationResult.recordset[0]?.ApplicationID;
+
+    const candidateRes = await pool
+      .request()
+      .input("CandidateID", sql.NVarChar, candidateId).query(`
+        SELECT TOP 1
+          u.FirebaseUserID,
+          u.DisplayName,
+          cp.FullName
+        FROM Users u
+        LEFT JOIN CandidateProfiles cp ON u.FirebaseUserID = cp.UserID
+        WHERE u.FirebaseUserID = @CandidateID
+      `);
+
+    const candidate = candidateRes.recordset?.[0];
+
+    try {
+      const application = {
+        ApplicationID: applicationId,
+        JobID: jobId,
+        CandidateID: candidateId,
+      };
+
+      await createCandidateAppliedNotification(
+        job.EmployerUserID,
+        application,
+        job,
+        candidate
+      );
+
+      await createApplicationSubmittedNotification(
+        candidateId,
+        application,
+        job
+      );
+
+      console.log("Notifications created successfully");
+    } catch (notifError) {
+      console.error("Error creating application notifications:", notifError);
+    }
 
     return res.status(201).json({ message: "Ứng tuyển thành công." });
   } catch (error) {
@@ -1494,6 +1543,24 @@ router.patch("/:id/resubmit", checkAuth, async (req, res) => {
       }
 
       await tx.commit();
+
+      try {
+        const oldStatus = Number(job.Status);
+        const newStatus = 5;
+        const updatedJob = { ...job, JobTitle, JobID: job.JobID };
+        await createJobStatusChangeNotification(
+          employerId,
+          updatedJob,
+          oldStatus,
+          newStatus
+        );
+      } catch (notifError) {
+        console.error(
+          "Error creating job status change notification:",
+          notifError
+        );
+      }
+
       return res
         .status(200)
         .json({ message: "Đã gửi lại bài đăng để admin duyệt.", status: 5 });
@@ -1675,7 +1742,7 @@ router.patch("/:id/close", checkAuth, async (req, res) => {
       .input("OwnerUserID", sql.NVarChar, employerId)
       .query(
         `
-        SELECT TOP 1 j.JobID, j.Status
+        SELECT TOP 1 j.JobID, j.JobTitle, j.Status
         FROM Jobs j
         JOIN Companies c ON j.CompanyID = c.CompanyID
         WHERE j.JobID = @JobID AND c.OwnerUserID = @OwnerUserID
@@ -1695,10 +1762,27 @@ router.patch("/:id/close", checkAuth, async (req, res) => {
       });
     }
 
+    const oldStatus = Number(job.Status);
+    const newStatus = 2;
+
     await pool
       .request()
       .input("JobID", sql.Int, id)
       .query("UPDATE Jobs SET Status = 2 WHERE JobID = @JobID");
+
+    try {
+      await createJobStatusChangeNotification(
+        employerId,
+        job,
+        oldStatus,
+        newStatus
+      );
+    } catch (notifError) {
+      console.error(
+        "Error creating job status change notification:",
+        notifError
+      );
+    }
 
     return res.status(200).json({ message: "Đóng bài tuyển dụng thành công." });
   } catch (error) {
@@ -1720,7 +1804,7 @@ router.patch("/:id/reopen", checkAuth, async (req, res) => {
       .input("OwnerUserID", sql.NVarChar, employerId)
       .query(
         `
-        SELECT TOP 1 j.JobID, j.Status
+        SELECT TOP 1 j.JobID, j.JobTitle, j.Status
         FROM Jobs j
         JOIN Companies c ON j.CompanyID = c.CompanyID
         WHERE j.JobID = @JobID AND c.OwnerUserID = @OwnerUserID
@@ -1740,10 +1824,27 @@ router.patch("/:id/reopen", checkAuth, async (req, res) => {
       });
     }
 
+    const oldStatus = Number(job.Status);
+    const newStatus = 1;
+
     await pool
       .request()
       .input("JobID", sql.Int, id)
       .query("UPDATE Jobs SET Status = 1 WHERE JobID = @JobID");
+
+    try {
+      await createJobStatusChangeNotification(
+        employerId,
+        job,
+        oldStatus,
+        newStatus
+      );
+    } catch (notifError) {
+      console.error(
+        "Error creating job status change notification:",
+        notifError
+      );
+    }
 
     return res
       .status(200)
@@ -2083,7 +2184,7 @@ router.post(
         .input("JobID", sql.Int, jobId)
         .input("ApplicationID", sql.Int, applicationId)
         .input("EmployerID", sql.NVarChar, employerId).query(`
-        SELECT TOP 1 a.ApplicationID, a.CurrentStatus, a.CandidateID
+        SELECT TOP 1 a.ApplicationID, a.CurrentStatus, a.CandidateID, j.JobTitle
         FROM Applications a
         JOIN Jobs j ON j.JobID = a.JobID
         JOIN Companies c ON c.CompanyID = j.CompanyID
@@ -2154,10 +2255,28 @@ router.post(
             UPDATE Applications
             SET CurrentStatus = 1, StatusUpdatedAt = GETDATE()
             WHERE ApplicationID = @ApplicationID AND CurrentStatus = 0
-            
+
             INSERT INTO ApplicationStatusHistory (ApplicationID, Status, ChangedAt)
             VALUES (@ApplicationID, 1, GETDATE())
           `);
+
+        try {
+          const job = { JobTitle: application.JobTitle };
+          const oldStatus = 0;
+          const newStatus = 1;
+          await createApplicationStatusChangeNotification(
+            application.CandidateID,
+            application,
+            job,
+            oldStatus,
+            newStatus
+          );
+        } catch (notifError) {
+          console.error(
+            "Error creating application status change notification:",
+            notifError
+          );
+        }
       }
 
       return res.status(200).json({ message: "Đã ghi nhận xem CV." });
@@ -2216,7 +2335,7 @@ router.patch(
         .input("JobID", sql.Int, jobId)
         .input("ApplicationID", sql.Int, applicationId)
         .input("EmployerID", sql.NVarChar, employerId).query(`
-        SELECT TOP 1 a.ApplicationID, a.CurrentStatus
+        SELECT TOP 1 a.ApplicationID, a.CurrentStatus, a.CandidateID, j.JobTitle
         FROM Applications a
         JOIN Jobs j ON j.JobID = a.JobID
         JOIN Companies c ON c.CompanyID = j.CompanyID
@@ -2239,6 +2358,8 @@ router.patch(
         });
       }
 
+      const oldStatus = Number(application.CurrentStatus);
+
       await pool
         .request()
         .input("ApplicationID", sql.Int, applicationId)
@@ -2246,10 +2367,26 @@ router.patch(
         UPDATE Applications
         SET CurrentStatus = @NewStatus, StatusUpdatedAt = GETDATE()
         WHERE ApplicationID = @ApplicationID
-        
+
         INSERT INTO ApplicationStatusHistory (ApplicationID, Status, ChangedAt)
         VALUES (@ApplicationID, @NewStatus, GETDATE())
       `);
+
+      try {
+        const job = { JobTitle: application.JobTitle };
+        await createApplicationStatusChangeNotification(
+          application.CandidateID,
+          application,
+          job,
+          oldStatus,
+          newStatus
+        );
+      } catch (notifError) {
+        console.error(
+          "Error creating application status change notification:",
+          notifError
+        );
+      }
 
       return res.status(200).json({
         message:

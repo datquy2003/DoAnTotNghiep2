@@ -4,6 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { getImageUrl } from "../utils/urlHelper";
 import { notificationApi } from "../api/notificationApi";
 import { formatDate } from "../utils/formatDate";
+import { auth } from "../firebase/firebase.config";
 
 import {
   FiBell,
@@ -47,8 +48,12 @@ const NotificationBell = () => {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
+  // eslint-disable-next-line no-unused-vars
+  const [sseConnected, setSseConnected] = useState(false);
   const containerRef = useRef(null);
+  const sseRef = useRef(null);
   const unreadCount = items.filter((item) => !item.IsRead).length;
+  const displayCount = unreadCount >= 10 ? "10+" : unreadCount;
 
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
@@ -59,6 +64,72 @@ const NotificationBell = () => {
       console.error("Lỗi lấy thông báo:", error);
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const setupSSE = useCallback(async () => {
+    if (sseRef.current) return;
+
+    try {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      const token = await user.getIdToken();
+      const sseUrl = `http://localhost:8080/api/notifications/stream?token=${token}`;
+      const eventSource = new EventSource(sseUrl);
+      sseRef.current = eventSource;
+
+      eventSource.onopen = () => {
+        console.log("SSE connection opened successfully");
+        setSseConnected(true);
+      };
+
+      console.log("Attempting SSE connection to:", sseUrl);
+
+      eventSource.onmessage = (event) => {
+        if (event.data === "connected") return;
+
+        try {
+          const newNotification = JSON.parse(event.data);
+          console.log("Received SSE notification:", newNotification);
+
+          setItems((prev) => {
+            const exists = prev.some(
+              (item) => item.NotificationID === newNotification.NotificationID
+            );
+            if (exists) {
+              console.log("Notification already exists, skipping");
+              return prev;
+            }
+
+            console.log("Adding new notification to list");
+            return [newNotification, ...prev].slice(0, 10);
+          });
+        } catch (error) {
+          console.error("Error parsing SSE notification:", error);
+        }
+      };
+
+      eventSource.onerror = (error) => {
+        console.error("SSE connection error:", error);
+        setSseConnected(false);
+        setTimeout(setupSSE, 5000);
+      };
+
+      eventSource.onclose = () => {
+        console.log("SSE connection closed");
+        setSseConnected(false);
+      };
+    } catch (error) {
+      console.error("Failed to setup SSE:", error);
+    }
+  }, []);
+
+  const cleanupSSE = useCallback(() => {
+    if (sseRef.current) {
+      sseRef.current.close();
+      sseRef.current = null;
+      setSseConnected(false);
     }
   }, []);
 
@@ -75,21 +146,75 @@ const NotificationBell = () => {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  const pollingIntervalRef = useRef(null);
+
+  const startPolling = useCallback(() => {
+    if (pollingIntervalRef.current) return;
+
+    const interval = open ? 30 * 1000 : 3 * 1000;
+    console.log(`Starting notification polling with ${interval}ms interval`);
+    pollingIntervalRef.current = setInterval(fetchNotifications, interval);
+  }, [fetchNotifications, open]);
+
+  const stopPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      console.log("Stopping notification polling");
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60 * 1000);
+    setupSSE();
+
+    if (!open) {
+      startPolling();
+    }
+
     const handleFocus = () => fetchNotifications();
-    window.addEventListener("focus", handleFocus);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener("focus", handleFocus);
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchNotifications();
+      }
     };
-  }, [fetchNotifications]);
+
+    const handleRefreshEvent = () => {
+      console.log("Custom refresh event triggered");
+      fetchNotifications();
+    };
+    window.addEventListener("refreshNotifications", handleRefreshEvent);
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      stopPolling();
+      cleanupSSE();
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("refreshNotifications", handleRefreshEvent);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [
+    fetchNotifications,
+    setupSSE,
+    cleanupSSE,
+    startPolling,
+    stopPolling,
+    open,
+  ]);
+
+  useEffect(() => {
+    console.log("Dropdown state changed:", open);
+    stopPolling();
+    startPolling();
+  }, [open, startPolling, stopPolling]);
 
   const toggle = () => {
     const next = !open;
     setOpen(next);
-    if (next && items.length === 0) {
+    if (next) {
+      console.log("Opening dropdown, fetching notifications");
       fetchNotifications();
     }
   };
@@ -119,19 +244,38 @@ const NotificationBell = () => {
   const navigate = useNavigate();
 
   const resolveLink = (item) => {
-    if (item.LinkURL) return item.LinkURL;
+    switch (item.Type) {
+      case "JOB_STATUS_CHANGE":
+        return "/employer/jobs";
 
-    if (item.Type === "VIP_ONE_TIME_PURCHASE") {
-      const msg = (item.Message || "").toLowerCase();
-      if (msg.includes("liên hệ ứng viên") || msg.includes("ứng viên")) {
+      case "CANDIDATE_APPLIED":
+        return "/employer/jobs";
+
+      case "APPLICATION_SUBMITTED":
+        return "/candidate/applied-jobs";
+
+      case "APPLICATION_STATUS_CHANGE":
+        return "/candidate/applied-jobs";
+
+      case "VIP_PURCHASE":
+        return item.LinkURL || "/employer/subscription";
+
+      case "VIP_EXPIRY":
+        return item.LinkURL || "/employer/subscription";
+
+      case "VIP_ONE_TIME_PURCHASE":
+        const msg = (item.Message || "").toLowerCase();
+        if (msg.includes("liên hệ ứng viên") || msg.includes("ứng viên")) {
+          return "/employer/applicants";
+        }
+        if (msg.includes("đẩy top") || msg.includes("cv")) {
+          return "/candidate/cvs";
+        }
         return "/employer/applicants";
-      }
-      if (msg.includes("đẩy top") || msg.includes("cv")) {
-        return "/candidate/cvs";
-      }
-      return "/employer/applicants";
+
+      default:
+        return item.LinkURL || null;
     }
-    return null;
   };
 
   const handleNavigate = (item) => {
@@ -150,8 +294,12 @@ const NotificationBell = () => {
       >
         <FiBell size={22} />
         {unreadCount > 0 && (
-          <span className="absolute -top-1.5 -right-1 bg-red-500 text-white text-[10px] font-semibold rounded-full px-1.5">
-            {unreadCount}
+          <span
+            className={`absolute -top-1.5 -right-1 bg-red-500 text-white text-[10px] font-semibold rounded-full ${
+              displayCount === "10+" ? "px-1" : "px-1.5"
+            }`}
+          >
+            {displayCount}
           </span>
         )}
       </button>
@@ -161,12 +309,22 @@ const NotificationBell = () => {
             <p className="text-sm font-semibold text-gray-700">
               Thông báo gần đây
             </p>
-            <button
-              onClick={handleMarkAll}
-              className="text-xs text-blue-600 hover:underline"
-            >
-              Đánh dấu đã đọc
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={fetchNotifications}
+                disabled={loading}
+                className="text-xs text-gray-600 hover:text-blue-600 disabled:opacity-60"
+                title="Làm mới"
+              >
+                ↻
+              </button>
+              <button
+                onClick={handleMarkAll}
+                className="text-xs text-blue-600 hover:underline"
+              >
+                Đánh dấu đã đọc
+              </button>
+            </div>
           </div>
           <div className="max-h-96 overflow-y-auto">
             {loading ? (
