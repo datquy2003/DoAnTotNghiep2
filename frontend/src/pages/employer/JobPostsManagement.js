@@ -67,7 +67,9 @@ const JobPostsManagement = () => {
     confirmText: "Xác nhận",
   });
   const [openDropdownId, setOpenDropdownId] = useState(null);
+  const [dropdownPosition, setDropdownPosition] = useState(null);
   const dropdownRefs = useRef({});
+  const dropdownElementRef = useRef(null);
 
   const resetFormState = () => setAddModalResetKey((k) => k + 1);
   const resetEditFormState = () => setEditModalResetKey((k) => k + 1);
@@ -216,8 +218,14 @@ const JobPostsManagement = () => {
     const handleClickOutside = (event) => {
       if (openDropdownId !== null) {
         const ref = dropdownRefs.current[openDropdownId];
-        if (ref && !ref.contains(event.target)) {
+        if (
+          ref &&
+          !ref.contains(event.target) &&
+          dropdownElementRef.current &&
+          !dropdownElementRef.current.contains(event.target)
+        ) {
           setOpenDropdownId(null);
+          setDropdownPosition(null);
         }
       }
     };
@@ -225,6 +233,12 @@ const JobPostsManagement = () => {
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
+  }, [openDropdownId]);
+
+  useEffect(() => {
+    if (openDropdownId === null) {
+      setDropdownPosition(null);
+    }
   }, [openDropdownId]);
 
   const loadPushTopDashboard = async () => {
@@ -822,13 +836,52 @@ const JobPostsManagement = () => {
                           >
                             <button
                               type="button"
-                              onClick={() =>
-                                setOpenDropdownId(
-                                  openDropdownId === job.JobID
-                                    ? null
-                                    : job.JobID
-                                )
-                              }
+                              onClick={() => {
+                                const isOpening = openDropdownId !== job.JobID;
+                                if (isOpening) {
+                                  const ref = dropdownRefs.current[job.JobID];
+                                  if (ref) {
+                                    const rect = ref.getBoundingClientRect();
+                                    const windowHeight = window.innerHeight;
+                                    const windowWidth = window.innerWidth;
+                                    const margin = 8;
+
+                                    const jobIndex = paged.findIndex(
+                                      (j) => j.JobID === job.JobID
+                                    );
+                                    const isLastFewRows =
+                                      jobIndex >= paged.length - 3;
+
+                                    const spaceBelow =
+                                      windowHeight - rect.bottom - margin;
+
+                                    const right = windowWidth - rect.right;
+
+                                    let newPosition = { right: `${right}px` };
+
+                                    if (isLastFewRows || spaceBelow < 250) {
+                                      newPosition.bottom = `${
+                                        windowHeight - rect.top + margin
+                                      }px`;
+                                      newPosition.top = "auto";
+                                      newPosition.transformOrigin =
+                                        "bottom right";
+                                    } else {
+                                      newPosition.top = `${
+                                        rect.bottom + margin
+                                      }px`;
+                                      newPosition.bottom = "auto";
+                                      newPosition.transformOrigin = "top right";
+                                    }
+
+                                    setDropdownPosition(newPosition);
+                                    setOpenDropdownId(job.JobID);
+                                  }
+                                } else {
+                                  setOpenDropdownId(null);
+                                  setDropdownPosition(null);
+                                }
+                              }}
                               className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
                               title="Hành động"
                             >
@@ -872,7 +925,13 @@ const JobPostsManagement = () => {
                                 const hasDeleteItem = canDelete;
 
                                 return (
-                                  <div className="absolute right-0 mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                                  <div
+                                    ref={dropdownElementRef}
+                                    className="fixed w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
+                                    style={
+                                      dropdownPosition ? dropdownPosition : {}
+                                    }
+                                  >
                                     <button
                                       type="button"
                                       onClick={() => {

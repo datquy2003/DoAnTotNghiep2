@@ -372,6 +372,19 @@ CREATE TABLE JobWorkingShifts (
 );
 GO
 
+-- Bảng 22: JobPostDailyLogs (Log để tracking số bài đăng trong ngày của nhà tuyển dụng)
+CREATE TABLE JobPostDailyLogs (
+    LogID INT IDENTITY(1,1) PRIMARY KEY,
+    CompanyID INT NOT NULL,
+    PostedDate DATE NOT NULL,
+    JobCount INT NOT NULL DEFAULT 1,
+    CreatedAt DATETIME DEFAULT GETDATE(),
+    UpdatedAt DATETIME DEFAULT GETDATE(),
+    
+    CONSTRAINT FK_JobPostDailyLogs_Companies FOREIGN KEY (CompanyID) REFERENCES Companies(CompanyID),
+    CONSTRAINT UQ_JobPostDailyLogs_Company_Date UNIQUE (CompanyID, PostedDate)
+);
+
 INSERT INTO Roles (RoleName) VALUES 
 ('Admin'),        -- 1
 ('SuperAdmin'),   -- 2

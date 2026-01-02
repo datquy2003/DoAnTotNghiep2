@@ -766,14 +766,10 @@ router.post("/", checkAuth, async (req, res) => {
       const countRes = await pool
         .request()
         .input("CompanyID", sql.Int, company.CompanyID).query(`
-          DECLARE @start DATETIME = CONVERT(DATETIME, CONVERT(DATE, GETDATE()));
-          DECLARE @end DATETIME = DATEADD(DAY, 1, @start);
-
-          SELECT COUNT(*) AS Total
-          FROM Jobs
+          SELECT ISNULL(JobCount, 0) AS Total
+          FROM JobPostDailyLogs
           WHERE CompanyID = @CompanyID
-            AND CreatedAt >= @start
-            AND CreatedAt < @end
+            AND PostedDate = CONVERT(DATE, GETDATE())
         `);
 
       const totalToday = countRes.recordset?.[0]?.Total || 0;
@@ -904,6 +900,18 @@ router.post("/", checkAuth, async (req, res) => {
 
       const createdJob = insertResult.recordset?.[0];
       const jobId = createdJob?.JobID;
+
+      if (jobId) {
+        await reqTx().input("CompanyID", sql.Int, company.CompanyID).query(`
+            MERGE JobPostDailyLogs AS target
+            USING (SELECT @CompanyID AS CompanyID, CONVERT(DATE, GETDATE()) AS PostedDate) AS source
+            ON target.CompanyID = source.CompanyID AND target.PostedDate = source.PostedDate
+            WHEN MATCHED THEN
+              UPDATE SET JobCount = JobCount + 1, UpdatedAt = GETDATE()
+            WHEN NOT MATCHED THEN
+              INSERT (CompanyID, PostedDate, JobCount) VALUES (@CompanyID, CONVERT(DATE, GETDATE()), 1);
+          `);
+      }
 
       if (jobId && shifts.length > 0) {
         const schemaTxRes = await reqTx().query(`
@@ -1899,14 +1907,10 @@ router.get("/push-top-dashboard", checkAuth, async (req, res) => {
       const countRes = await pool
         .request()
         .input("CompanyID", sql.Int, company.CompanyID).query(`
-          DECLARE @start DATETIME = CONVERT(DATETIME, CONVERT(DATE, GETDATE()));
-          DECLARE @end DATETIME = DATEADD(DAY, 1, @start);
-
-          SELECT COUNT(*) AS Total
-          FROM Jobs
+          SELECT ISNULL(JobCount, 0) AS Total
+          FROM JobPostDailyLogs
           WHERE CompanyID = @CompanyID
-            AND CreatedAt >= @start
-            AND CreatedAt < @end
+            AND PostedDate = CONVERT(DATE, GETDATE())
         `);
 
       jobPostUsedToday = countRes.recordset?.[0]?.Total || 0;
