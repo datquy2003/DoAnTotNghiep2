@@ -147,8 +147,10 @@ router.get("/applied", checkAuth, async (req, res) => {
           a.CurrentStatus,
           a.StatusUpdatedAt,
           a.CVID,
-          cv.CVName,
-          cv.CVFileUrl,
+          COALESCE(a.Snapshot_CVName, cv.CVName) AS CVName,
+          COALESCE(a.Snapshot_CVFileUrl, cv.CVFileUrl) AS CVFileUrl,
+          a.Snapshot_CVName,
+          a.Snapshot_CVFileUrl,
           j.JobID,
           j.JobTitle,
           j.Location,
@@ -266,8 +268,10 @@ router.get("/:id/applicants", checkAuth, async (req, res) => {
           cp.ProfileSummary,
           cp.PhoneNumber,
           cv.CVID,
-          cv.CVName,
-          cv.CVFileUrl,
+          COALESCE(a.Snapshot_CVName, cv.CVName) AS CVName,
+          COALESCE(a.Snapshot_CVFileUrl, cv.CVFileUrl) AS CVFileUrl,
+          a.Snapshot_CVName,
+          a.Snapshot_CVFileUrl,
           CASE WHEN EXISTS (
             SELECT TOP 1 1
             FROM UserSubscriptions us
@@ -316,13 +320,14 @@ router.get("/:id/applicants", checkAuth, async (req, res) => {
       profileSummary: row.ProfileSummary,
       phoneNumber: row.PhoneNumber || null,
       isVip: row.IsVip === true || Number(row.IsVip) === 1,
-      cv: row.CVID
-        ? {
-            id: row.CVID,
-            name: row.CVName,
-            url: row.CVFileUrl,
-          }
-        : null,
+      cv:
+        row.CVFileUrl || row.Snapshot_CVFileUrl
+          ? {
+              id: row.CVID,
+              name: row.Snapshot_CVName || row.CVName,
+              url: row.Snapshot_CVFileUrl || row.CVFileUrl,
+            }
+          : null,
     }));
 
     return res.status(200).json({
@@ -649,13 +654,17 @@ router.post("/:id/apply", checkAuth, async (req, res) => {
       .input("CVID", sql.Int, finalCvId)
       .input("UserID", sql.NVarChar, candidateId)
       .query(
-        "SELECT TOP 1 CVID FROM CVs WHERE CVID = @CVID AND UserID = @UserID"
+        "SELECT TOP 1 CVID, CVFileUrl, CVName FROM CVs WHERE CVID = @CVID AND UserID = @UserID"
       );
     if (!cvRes.recordset?.[0]) {
       return res
         .status(403)
         .json({ message: "Bạn không có quyền dùng CV này." });
     }
+
+    const cvData = cvRes.recordset[0];
+    const snapshotCvFileUrl = cvData.CVFileUrl || null;
+    const snapshotCvName = cvData.CVName || null;
 
     const existsRes = await pool
       .request()
@@ -675,10 +684,12 @@ router.post("/:id/apply", checkAuth, async (req, res) => {
       .input("JobID", sql.Int, jobId)
       .input("CandidateID", sql.NVarChar, candidateId)
       .input("CVID", sql.Int, finalCvId)
+      .input("Snapshot_CVFileUrl", sql.NVarChar, snapshotCvFileUrl)
+      .input("Snapshot_CVName", sql.NVarChar, snapshotCvName)
       .query(
         `
-        INSERT INTO Applications (JobID, CandidateID, CVID, AppliedAt, CurrentStatus, StatusUpdatedAt)
-        VALUES (@JobID, @CandidateID, @CVID, GETDATE(), 0, GETDATE())
+        INSERT INTO Applications (JobID, CandidateID, CVID, Snapshot_CVFileUrl, Snapshot_CVName, AppliedAt, CurrentStatus, StatusUpdatedAt)
+        VALUES (@JobID, @CandidateID, @CVID, @Snapshot_CVFileUrl, @Snapshot_CVName, GETDATE(), 0, GETDATE())
         `
       );
 

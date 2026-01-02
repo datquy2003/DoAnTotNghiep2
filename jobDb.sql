@@ -159,7 +159,6 @@ CREATE TABLE Jobs (
 	ReasonRejected ntext,
 	ConfirmedAfterReject ntext,
     
-    -- CẬP NHẬT: Status kiểu TINYINT
     -- 0: Chờ duyệt, 1: Đang tuyển, 2: Đã đóng, 3: Đã hết hạn, 4: Đã bị từ chối, 5: Đăng lại
     Status TINYINT NOT NULL DEFAULT 0,
     
@@ -183,10 +182,11 @@ CREATE TABLE Applications (
     ApplicationID int IDENTITY(1,1) PRIMARY KEY,
     JobID int NOT NULL,
     CandidateID nvarchar(128) NOT NULL,
-    CVID int NOT NULL,
+    CVID int,
+	Snapshot_CVFileUrl nvarchar(MAX),
+	Snapshot_CVName nvarchar(255),
     AppliedAt datetime DEFAULT GETDATE(),
     
-    -- CẬP NHẬT: CurrentStatus kiểu TINYINT
     -- 0: Đã apply, 1: NTD đã xem, 2: Phù hợp, 3: Chưa phù hợp
     CurrentStatus TINYINT NOT NULL DEFAULT 0, 
     
@@ -203,7 +203,6 @@ CREATE TABLE ApplicationStatusHistory (
     HistoryID int IDENTITY(1,1) PRIMARY KEY,
     ApplicationID int NOT NULL,
     
-    -- CẬP NHẬT: Status kiểu TINYINT
     -- 0: Đã apply, 1: NTD đã xem, 2: Phù hợp, 3: Chưa phù hợp
     Status TINYINT NOT NULL,
     
@@ -290,7 +289,6 @@ CREATE TABLE UserSubscriptions (
     Snapshot_ViewApplicantCount int,
     Snapshot_RevealCandidatePhone int,
     
-    -- CẬP NHẬT: Status kiểu TINYINT
     -- 0: Chờ thanh toán, 1: Đang hoạt động, 2: Hết hạn
     Status TINYINT NOT NULL DEFAULT 0, 
 
@@ -307,7 +305,7 @@ GO
 -- Bảng 18: CVViews (Log NTD xem CV)
 CREATE TABLE CVViews (
     ViewID int IDENTITY(1,1) PRIMARY KEY,
-    ApplicationID int NULL,
+    ApplicationID int,
     CandidateID nvarchar(128) NOT NULL,
     EmployerID nvarchar(128) NOT NULL, 
     ViewedAt datetime DEFAULT GETDATE(),

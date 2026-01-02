@@ -12,6 +12,7 @@ import {
   FiMessageSquare,
   FiChevronLeft,
   FiChevronRight,
+  FiMoreVertical,
 } from "react-icons/fi";
 import toast from "react-hot-toast";
 import { jobApi } from "../../api/jobApi";
@@ -65,6 +66,8 @@ const JobPostsManagement = () => {
     isDanger: false,
     confirmText: "Xác nhận",
   });
+  const [openDropdownId, setOpenDropdownId] = useState(null);
+  const dropdownRefs = useRef({});
 
   const resetFormState = () => setAddModalResetKey((k) => k + 1);
   const resetEditFormState = () => setEditModalResetKey((k) => k + 1);
@@ -209,6 +212,21 @@ const JobPostsManagement = () => {
     setPage(1);
   }, [searchTitle, filterStatus, filterSpecId, filterExperience]);
 
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (openDropdownId !== null) {
+        const ref = dropdownRefs.current[openDropdownId];
+        if (ref && !ref.contains(event.target)) {
+          setOpenDropdownId(null);
+        }
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [openDropdownId]);
+
   const loadPushTopDashboard = async () => {
     setDashboardLoading(true);
     try {
@@ -298,13 +316,6 @@ const JobPostsManagement = () => {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const renderExpiresAt = (value) => {
-    if (!value) return "—";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
-    return date.toLocaleDateString("vi-VN", { timeZone: "UTC" });
-  };
-
-  const renderCreatedAt = (value) => {
     if (!value) return "—";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "—";
@@ -739,13 +750,13 @@ const JobPostsManagement = () => {
                       Chuyên môn
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                      Ngày tạo
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Ngày hết hạn
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Trạng thái
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      Số lượng ứng viên
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                       Hành động
@@ -784,9 +795,6 @@ const JobPostsManagement = () => {
                           )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
-                          {renderCreatedAt(job.CreatedAt)}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-700">
                           {renderExpiresAt(job.ExpiresAt)}
                         </td>
                         <td className="px-4 py-3">
@@ -800,131 +808,189 @@ const JobPostsManagement = () => {
                               `Trạng thái ${job.Status}`}
                           </span>
                         </td>
+                        <td className="px-4 py-3 text-sm text-gray-700 text-center">
+                          <span className="font-semibold text-gray-900">
+                            {job.TotalApplicants ?? 0}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
-                          <div className="flex items-center gap-2">
+                          <div
+                            className="relative"
+                            ref={(el) => {
+                              dropdownRefs.current[job.JobID] = el;
+                            }}
+                          >
                             <button
-                              title="Chi tiết"
-                              onClick={() => setDetailJob(job)}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              <FiInfo className="h-4 w-4" />
-                            </button>
-                            <button
-                              title="Sửa"
-                              onClick={() => openEditModal(job)}
-                              disabled={Number(job.Status) !== 0}
-                              className={`text-blue-600 hover:text-blue-900 ${
-                                Number(job.Status) !== 0
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : ""
-                              }`}
-                            >
-                              <FiEdit2 className="h-4 w-4" />
-                            </button>
-                            {Number(job.Status) === 4 ? (
-                              <>
-                                <button
-                                  title="Xem lý do bị từ chối & chỉnh sửa lại"
-                                  onClick={() => openResubmitModal(job)}
-                                  className="text-amber-700 hover:text-amber-900"
-                                >
-                                  <FiMessageSquare className="h-4 w-4" />
-                                </button>
-                              </>
-                            ) : null}
-                            <button
-                              title="Đẩy top"
-                              onClick={() => handlePushTop(job.JobID)}
-                              disabled={
-                                pushingId === job.JobID ||
-                                job.Status !== 1 ||
-                                dashboardLoading ||
-                                (pushTopDashboard?.isVip &&
-                                  Number(pushTopDashboard?.remainingToday) <=
-                                    0) ||
-                                (!pushTopDashboard?.isVip &&
-                                  Number(
-                                    pushTopDashboard?.remainingThisWeek ?? 0
-                                  ) <= 0)
+                              type="button"
+                              onClick={() =>
+                                setOpenDropdownId(
+                                  openDropdownId === job.JobID
+                                    ? null
+                                    : job.JobID
+                                )
                               }
-                              className={`text-blue-600 hover:text-blue-900 ${
-                                job.Status !== 1 ||
-                                dashboardLoading ||
-                                (pushTopDashboard?.isVip &&
-                                  Number(pushTopDashboard?.remainingToday) <=
-                                    0) ||
-                                (!pushTopDashboard?.isVip &&
-                                  Number(
-                                    pushTopDashboard?.remainingThisWeek ?? 0
-                                  ) <= 0)
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : ""
-                              }`}
+                              className="p-1.5 rounded-lg text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                              title="Hành động"
                             >
-                              <FiArrowUpCircle
-                                className={`h-4 w-4 ${
-                                  pushingId === job.JobID ? "animate-pulse" : ""
-                                }`}
-                              />
+                              <FiMoreVertical className="h-5 w-5" />
                             </button>
-                            <button
-                              title="Ứng viên đã ứng tuyển"
-                              onClick={() => setApplicantsJob(job)}
-                              disabled={
-                                Number(job.Status) === 0 ||
-                                Number(job.Status) === 4 ||
-                                Number(job.Status) === 5
-                              }
-                              className={`text-blue-600 hover:text-gray-900 ${
-                                Number(job.Status) === 0 ||
-                                Number(job.Status) === 4 ||
-                                Number(job.Status) === 5
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : ""
-                              }`}
-                            >
-                              <FiUsers className="h-4 w-4" />
-                            </button>
-                            <button
-                              title="Đóng bài tuyển dụng"
-                              onClick={() => confirmCloseJob(job)}
-                              disabled={job.Status !== 1}
-                              className={`text-red-600 hover:text-red-900 ${
-                                job.Status !== 1
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : ""
-                              }`}
-                            >
-                              <FiXCircle className="h-4 w-4" />
-                            </button>
-                            <button
-                              title="Mở lại bài tuyển dụng"
-                              onClick={() => confirmReopenJob(job)}
-                              disabled={job.Status !== 2}
-                              className={`text-emerald-600 hover:text-emerald-900 ${
-                                job.Status !== 2
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : ""
-                              }`}
-                            >
-                              <FiRotateCcw className="h-4 w-4" />
-                            </button>
-                            <button
-                              title="Xóa"
-                              onClick={() => confirmDeleteJob(job)}
-                              disabled={
-                                Number(job.Status) === 1 ||
-                                deletingId === job.JobID
-                              }
-                              className={`text-red-600 hover:text-red-900 ${
-                                Number(job.Status) === 1 ||
-                                deletingId === job.JobID
-                                  ? "opacity-50 cursor-not-allowed"
-                                  : ""
-                              }`}
-                            >
-                              <FiTrash2 className="h-4 w-4" />
-                            </button>
+                            {openDropdownId === job.JobID &&
+                              (() => {
+                                const canEdit = Number(job.Status) === 0;
+                                const canResubmit = Number(job.Status) === 4;
+                                const canPushTop =
+                                  job.Status === 1 &&
+                                  !dashboardLoading &&
+                                  pushingId !== job.JobID &&
+                                  !(
+                                    pushTopDashboard?.isVip &&
+                                    Number(pushTopDashboard?.remainingToday) <=
+                                      0
+                                  ) &&
+                                  !(
+                                    !pushTopDashboard?.isVip &&
+                                    Number(
+                                      pushTopDashboard?.remainingThisWeek ?? 0
+                                    ) <= 0
+                                  );
+                                const canViewApplicants =
+                                  Number(job.Status) !== 0 &&
+                                  Number(job.Status) !== 4 &&
+                                  Number(job.Status) !== 5;
+                                const canClose = job.Status === 1;
+                                const canReopen = job.Status === 2;
+                                const canDelete =
+                                  Number(job.Status) !== 1 &&
+                                  deletingId !== job.JobID;
+
+                                const hasActionItems =
+                                  canEdit ||
+                                  canResubmit ||
+                                  canPushTop ||
+                                  canViewApplicants;
+                                const hasStatusItems = canClose || canReopen;
+                                const hasDeleteItem = canDelete;
+
+                                return (
+                                  <div className="absolute right-0 mt-1 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setDetailJob(job);
+                                        setOpenDropdownId(null);
+                                      }}
+                                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                    >
+                                      <FiInfo className="h-4 w-4" />
+                                      Chi tiết
+                                    </button>
+                                    {canEdit ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          openEditModal(job);
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                      >
+                                        <FiEdit2 className="h-4 w-4" />
+                                        Sửa
+                                      </button>
+                                    ) : null}
+                                    {canResubmit ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          openResubmitModal(job);
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-amber-700 hover:bg-gray-100 flex items-center gap-2"
+                                      >
+                                        <FiMessageSquare className="h-4 w-4" />
+                                        Xem lý do bị từ chối
+                                      </button>
+                                    ) : null}
+                                    {canPushTop ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          handlePushTop(job.JobID);
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-gray-100 flex items-center gap-2"
+                                      >
+                                        <FiArrowUpCircle
+                                          className={`h-4 w-4 ${
+                                            pushingId === job.JobID
+                                              ? "animate-pulse"
+                                              : ""
+                                          }`}
+                                        />
+                                        Đẩy top
+                                      </button>
+                                    ) : null}
+                                    {canViewApplicants ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setApplicantsJob(job);
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-blue-600 hover:bg-gray-100 flex items-center gap-2"
+                                      >
+                                        <FiUsers className="h-4 w-4" />
+                                        Ứng viên đã ứng tuyển
+                                      </button>
+                                    ) : null}
+                                    {hasActionItems &&
+                                    (hasStatusItems || hasDeleteItem) ? (
+                                      <div className="border-t my-1"></div>
+                                    ) : null}
+                                    {canClose ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          confirmCloseJob(job);
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 flex items-center gap-2"
+                                      >
+                                        <FiXCircle className="h-4 w-4" />
+                                        Đóng bài tuyển dụng
+                                      </button>
+                                    ) : null}
+                                    {canReopen ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          confirmReopenJob(job);
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-emerald-600 hover:bg-gray-100 flex items-center gap-2"
+                                      >
+                                        <FiRotateCcw className="h-4 w-4" />
+                                        Mở lại bài tuyển dụng
+                                      </button>
+                                    ) : null}
+                                    {hasStatusItems && hasDeleteItem ? (
+                                      <div className="border-t my-1"></div>
+                                    ) : null}
+                                    {canDelete ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          confirmDeleteJob(job);
+                                          setOpenDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 flex items-center gap-2"
+                                      >
+                                        <FiTrash2 className="h-4 w-4" />
+                                        Xóa
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                );
+                              })()}
                           </div>
                         </td>
                       </tr>

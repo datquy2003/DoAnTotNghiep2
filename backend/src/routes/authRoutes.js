@@ -306,6 +306,34 @@ router.post("/register", checkAuth, async (req, res) => {
         }
       }
 
+      if (roleID == 4) {
+        const displayName = name || email?.split("@")[0] || "Người dùng mới";
+        await transaction
+          .request()
+          .input("UserID", sql.NVarChar, uid)
+          .input("FullName", sql.NVarChar, displayName).query(`
+            IF NOT EXISTS (SELECT 1 FROM CandidateProfiles WHERE UserID = @UserID)
+            BEGIN
+              INSERT INTO CandidateProfiles (UserID, FullName, ProfileSummary)
+              VALUES (@UserID, @FullName, N'')
+            END
+          `);
+      }
+
+      if (roleID == 3) {
+        const displayName = name || email?.split("@")[0] || "Người dùng mới";
+        await transaction
+          .request()
+          .input("OwnerUserID", sql.NVarChar, uid)
+          .input("CompanyName", sql.NVarChar, displayName).query(`
+            IF NOT EXISTS (SELECT 1 FROM Companies WHERE OwnerUserID = @OwnerUserID)
+            BEGIN
+              INSERT INTO Companies (OwnerUserID, CompanyName, CompanyDescription)
+              VALUES (@OwnerUserID, @CompanyName, N'')
+            END
+          `);
+      }
+
       await transaction.commit();
       res.status(201).json(userResult.recordset[0]);
     } catch (err) {

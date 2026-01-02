@@ -286,6 +286,7 @@ const JobApplicantsModal = ({ open, job, onClose }) => {
                               }
                               disabled={viewingCvId === a.applicationId}
                               className="inline-flex items-center gap-2 text-blue-600 hover:underline disabled:opacity-60"
+                              title={a.cv?.name || "Xem CV"}
                             >
                               <FiFile className="h-4 w-4" />
                               {viewingCvId === a.applicationId

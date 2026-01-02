@@ -74,7 +74,7 @@ const ChooseRole = () => {
 
   return (
     <div
-      className="relative flex items-center justify-center min-h-screen bg-gray-900"
+      className="relative min-h-screen flex items-center justify-center bg-gray-900"
       style={{
         backgroundImage: `url(${bannerLogin})`,
         backgroundSize: "cover",
@@ -84,18 +84,18 @@ const ChooseRole = () => {
       <div className="absolute inset-0 bg-black/30"></div>
 
       <div className="relative z-10 w-full max-w-2xl px-4 sm:px-8 lg:px-12">
-        <div className="w-full p-10 text-center border shadow-2xl bg-inherit backdrop-blur-sm border-white/30 rounded-2xl">
-          <h2 className="mb-4 text-4xl font-bold text-center text-white">
+        <div className="bg-inherit backdrop-blur-sm border border-white/30 p-10 rounded-2xl shadow-2xl w-full text-center">
+          <h2 className="text-4xl font-bold text-center mb-4 text-white">
             Chỉ một bước nữa!
           </h2>
-          <p className="mb-8 text-white/80">
+          <p className="text-white/80 mb-8">
             Hãy cho chúng tôi biết bạn tham gia với tư cách nào.
           </p>
 
           {firebaseUser?.providerData[0].providerId === "password" &&
             !firebaseUser.emailVerified && (
               <div
-                className="p-4 mb-4 text-sm text-yellow-100 border rounded-lg bg-yellow-900/60 border-yellow-200/30"
+                className="p-4 mb-4 text-sm text-yellow-100 rounded-lg bg-yellow-900/60 border border-yellow-200/30"
                 role="alert"
               >
                 <span className="font-medium">Cảnh báo!</span> Bạn cần xác thực
@@ -103,7 +103,7 @@ const ChooseRole = () => {
                 <button
                   onClick={handleVerificationCheck}
                   disabled={loading}
-                  className="w-full py-2 mt-3 text-sm font-semibold text-white transition duration-300 ease-in-out bg-blue-500 rounded-md hover:bg-blue-600 disabled:opacity-50"
+                  className="mt-3 w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 transition duration-300 ease-in-out font-semibold text-sm disabled:opacity-50"
                 >
                   {loading
                     ? "Đang kiểm tra..."
@@ -116,22 +116,22 @@ const ChooseRole = () => {
             <button
               onClick={() => handleRoleSelect(ROLE_CANDIDATE)}
               disabled={loading}
-              className="flex items-center justify-center w-full py-3 text-lg font-semibold text-white transition duration-300 ease-in-out bg-green-600 rounded-md hover:bg-green-700 disabled:opacity-50"
+              className="w-full bg-green-600 text-white py-3 rounded-md hover:bg-green-700 transition duration-300 ease-in-out font-semibold text-lg disabled:opacity-50 flex justify-center items-center"
             >
-              <FiUser className="mr-2" /> Tôi là Ứng viên (Tìm việc)
+              <FiUser className="mr-2" /> Tôi là Ứng viên
             </button>
 
             <button
               onClick={() => handleRoleSelect(ROLE_EMPLOYER)}
               disabled={loading}
-              className="flex items-center justify-center w-full py-3 text-lg font-semibold text-white transition duration-300 ease-in-out bg-purple-600 rounded-md hover:bg-purple-700 disabled:opacity-50"
+              className="w-full bg-purple-600 text-white py-3 rounded-md hover:bg-purple-700 transition duration-300 ease-in-out font-semibold text-lg disabled:opacity-50 flex justify-center items-center"
             >
-              <FiBriefcase className="mr-2" /> Tôi là Nhà tuyển dụng (Đăng tin)
+              <FiBriefcase className="mr-2" /> Tôi là Nhà tuyển dụng
             </button>
           </div>
 
           {error && (
-            <p className="mt-4 text-sm text-center text-red-300">{error}</p>
+            <p className="text-sm text-red-300 text-center mt-4">{error}</p>
           )}
 
           <button

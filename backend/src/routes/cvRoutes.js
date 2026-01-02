@@ -409,21 +409,17 @@ router.delete("/:id", checkAuth, async (req, res) => {
       return res.status(404).json({ message: "Không tìm thấy CV." });
     }
 
-    const usageResult = await pool.request().input("CVID", sql.Int, cvId)
-      .query(`
-        SELECT COUNT(*) AS UsageCount FROM Applications WHERE CVID = @CVID
-      `);
-    if ((usageResult.recordset[0]?.UsageCount || 0) > 0) {
-      return res.status(400).json({
-        message: "CV đang được dùng trong đơn ứng tuyển, không thể xóa.",
-      });
-    }
-
     const limit = await getEffectiveCvLimit(pool, userId);
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
     try {
+      await transaction.request().input("CVID", sql.Int, cvId).query(`
+          UPDATE Applications
+          SET CVID = NULL
+          WHERE CVID = @CVID
+        `);
+
       await transaction
         .request()
         .input("UserID", sql.NVarChar, userId)

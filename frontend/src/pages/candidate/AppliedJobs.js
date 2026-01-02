@@ -7,6 +7,7 @@ import {
   FiChevronRight,
   FiMapPin,
   FiRefreshCw,
+  FiFileText,
 } from "react-icons/fi";
 import { jobApi } from "../../api/jobApi";
 import { renderSalary } from "../../utils/renderSalary";
@@ -249,11 +250,34 @@ export default function AppliedJobs() {
                   </div>
 
                   <div className="mt-auto pt-3 space-y-1.5 text-xs text-gray-600">
-                    <div>
-                      Ứng tuyển lúc:{" "}
-                      <span className="font-semibold text-gray-900">
-                        {x.AppliedAt ? formatDate(x.AppliedAt) : "—"}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span>
+                        Ứng tuyển lúc:{" "}
+                        <span className="font-semibold text-gray-900">
+                          {x.AppliedAt ? formatDate(x.AppliedAt) : "—"}
+                        </span>
                       </span>
+                      {(x.CVFileUrl || x.Snapshot_CVFileUrl) ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const cvUrl = x.Snapshot_CVFileUrl || x.CVFileUrl;
+                            if (cvUrl) {
+                              window.open(
+                                cvUrl,
+                                "_blank",
+                                "noopener,noreferrer"
+                              );
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 underline hover:text-red-600 transition-colors"
+                          title={x.Snapshot_CVName || x.CVName || "Xem CV"}
+                        >
+                          <FiFileText className="h-3 w-3" />
+                          <span>CV</span>
+                        </button>
+                      ) : null}
                     </div>
                     {x.CvViewedAt ? (
                       <div>
