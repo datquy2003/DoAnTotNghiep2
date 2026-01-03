@@ -81,29 +81,23 @@ const NotificationBell = () => {
       sseRef.current = eventSource;
 
       eventSource.onopen = () => {
-        console.log("SSE connection opened successfully");
         setSseConnected(true);
       };
-
-      console.log("Attempting SSE connection to:", sseUrl);
 
       eventSource.onmessage = (event) => {
         if (event.data === "connected") return;
 
         try {
           const newNotification = JSON.parse(event.data);
-          console.log("Received SSE notification:", newNotification);
 
           setItems((prev) => {
             const exists = prev.some(
               (item) => item.NotificationID === newNotification.NotificationID
             );
             if (exists) {
-              console.log("Notification already exists, skipping");
               return prev;
             }
 
-            console.log("Adding new notification to list");
             return [newNotification, ...prev].slice(0, 10);
           });
         } catch (error) {
@@ -118,7 +112,6 @@ const NotificationBell = () => {
       };
 
       eventSource.onclose = () => {
-        console.log("SSE connection closed");
         setSseConnected(false);
       };
     } catch (error) {
@@ -153,13 +146,11 @@ const NotificationBell = () => {
     if (pollingIntervalRef.current) return;
 
     const interval = open ? 30 * 1000 : 3 * 1000;
-    console.log(`Starting notification polling with ${interval}ms interval`);
     pollingIntervalRef.current = setInterval(fetchNotifications, interval);
   }, [fetchNotifications, open]);
 
   const stopPolling = useCallback(() => {
     if (pollingIntervalRef.current) {
-      console.log("Stopping notification polling");
       clearInterval(pollingIntervalRef.current);
       pollingIntervalRef.current = null;
     }
@@ -181,7 +172,6 @@ const NotificationBell = () => {
     };
 
     const handleRefreshEvent = () => {
-      console.log("Custom refresh event triggered");
       fetchNotifications();
     };
     window.addEventListener("refreshNotifications", handleRefreshEvent);
@@ -206,7 +196,6 @@ const NotificationBell = () => {
   ]);
 
   useEffect(() => {
-    console.log("Dropdown state changed:", open);
     stopPolling();
     startPolling();
   }, [open, startPolling, stopPolling]);
@@ -215,7 +204,6 @@ const NotificationBell = () => {
     const next = !open;
     setOpen(next);
     if (next) {
-      console.log("Opening dropdown, fetching notifications");
       fetchNotifications();
     }
   };
@@ -253,30 +241,33 @@ const NotificationBell = () => {
         return "/employer/jobs";
 
       case "APPLICATION_SUBMITTED":
+        if (item.ReferenceID && !isNaN(Number(item.ReferenceID))) {
+          return `/jobs/${item.ReferenceID}`;
+        }
+        if (item.LinkURL && item.LinkURL.includes("/jobs/")) {
+          return item.LinkURL;
+        }
         return "/candidate/applied-jobs";
 
       case "APPLICATION_STATUS_CHANGE":
         return "/candidate/applied-jobs";
 
       case "VIP_PURCHASE":
-        const msg = (item.Message || "").toLowerCase();
-        const isOneTime =
-          msg.includes("tính năng") ||
-          msg.includes("trả") ||
-          item.LinkURL?.includes("/applicants") ||
-          item.LinkURL?.includes("/jobs/") ||
-          item.LinkURL?.includes("/cvs") ||
-          (item.ReferenceID && !isNaN(Number(item.ReferenceID)));
+        if (
+          item.LinkURL &&
+          (item.LinkURL.includes("/subscription") ||
+            item.LinkURL === "/employer/subscription" ||
+            item.LinkURL === "/candidate/subscription")
+        ) {
+          return item.LinkURL;
+        }
 
-        console.log("VIP_PURCHASE check:", {
-          message: msg,
-          linkURL: item.LinkURL,
-          referenceID: item.ReferenceID,
-          isOneTime,
-          userRole: appUser?.RoleID,
-        });
-
-        if (isOneTime) {
+        if (
+          item.LinkURL &&
+          (item.LinkURL.includes("/applicants") ||
+            item.LinkURL.includes("/jobs/") ||
+            item.LinkURL.includes("/cvs"))
+        ) {
           if (appUser?.RoleID === 3) {
             return "/employer/applicants";
           }
@@ -291,7 +282,30 @@ const NotificationBell = () => {
             return "/candidate/applied-jobs";
           }
         }
-        return item.LinkURL || "/employer/subscription";
+
+        const msg = (item.Message || "").toLowerCase();
+        const isOneTimeByMessage =
+          msg.includes("tính năng") || msg.includes("trả");
+
+        if (isOneTimeByMessage && !item.LinkURL?.includes("/subscription")) {
+          if (appUser?.RoleID === 3) {
+            return "/employer/applicants";
+          }
+          if (appUser?.RoleID === 4) {
+            if (item.ReferenceID && !isNaN(Number(item.ReferenceID))) {
+              const jobId = Number(item.ReferenceID);
+              return `/jobs/${jobId}`;
+            }
+            return "/candidate/applied-jobs";
+          }
+        }
+
+        return (
+          item.LinkURL ||
+          (appUser?.RoleID === 3
+            ? "/employer/subscription"
+            : "/candidate/subscription")
+        );
 
       case "VIP_EXPIRY":
         return item.LinkURL || "/employer/subscription";
@@ -317,14 +331,7 @@ const NotificationBell = () => {
   };
 
   const handleNavigate = (item) => {
-    console.log("Navigating from notification:", {
-      Type: item.Type,
-      LinkURL: item.LinkURL,
-      ReferenceID: item.ReferenceID,
-      UserRole: appUser?.RoleID,
-    });
     const target = resolveLink(item);
-    console.log("Resolved target:", target);
     if (target) {
       navigate(target);
       setOpen(false);

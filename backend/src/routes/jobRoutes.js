@@ -731,13 +731,7 @@ router.post("/:id/apply", checkAuth, async (req, res) => {
         candidate
       );
 
-      await createApplicationSubmittedNotification(
-        candidateId,
-        application,
-        job
-      );
-
-      console.log("Notifications created successfully");
+      await createApplicationSubmittedNotification(candidateId, job);
     } catch (notifError) {
       console.error("Error creating application notifications:", notifError);
     }

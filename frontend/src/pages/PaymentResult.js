@@ -10,6 +10,13 @@ const PaymentResult = () => {
   const navigate = useNavigate();
   const { manualReloadFirebaseUser, appUser } = useAuth();
 
+  useEffect(() => {
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, []);
+
   const [status, setStatus] = useState("processing");
   const [message, setMessage] = useState("Đang kết nối tới máy chủ...");
   const [countdown, setCountdown] = useState(5);
@@ -115,7 +122,7 @@ const PaymentResult = () => {
   }, [status, redirectUrl]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-gray-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center animate-fadeIn">
         {status === "processing" && (
           <>
