@@ -194,7 +194,10 @@ router.get("/searchable", checkAuth, async (req, res) => {
           us.EndDate
         FROM UserSubscriptions us
         LEFT JOIN SubscriptionPlans sp ON us.PlanID = sp.PlanID
-        WHERE us.UserID = cp.UserID AND us.Status = 1 AND us.EndDate > GETDATE()
+        WHERE us.UserID = cp.UserID 
+          AND us.Status = 1 
+          AND us.EndDate > GETDATE()
+          AND ISNULL(us.SnapshotPlanType, sp.PlanType) <> 'ONE_TIME'
         ORDER BY us.EndDate DESC
       ) vip
       ${whereClause}

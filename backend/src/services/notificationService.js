@@ -73,9 +73,9 @@ export const createVipPurchaseNotification = async (
     referenceId = jobId.toString();
   } else if (isOneTime) {
     const candidateId = metadata.candidateId;
-    let candidateName = metadata.candidateName || null;
+    let candidateName = null;
 
-    if (candidateId && !candidateName && plan.RoleID === 3) {
+    if (candidateId && plan.RoleID === 3) {
       try {
         const pool = await sql.connect(sqlConfig);
         const candidateRes = await pool
@@ -89,28 +89,37 @@ export const createVipPurchaseNotification = async (
             WHERE u.FirebaseUserID = @CandidateID
           `);
         const candidate = candidateRes.recordset?.[0];
-        candidateName =
-          candidate?.FullName || candidate?.DisplayName || "ứng viên";
+        candidateName = candidate?.FullName || candidate?.DisplayName || null;
+
+        if (!candidateName) {
+          const metaName = metadata.candidateName;
+          if (metaName && metaName !== "undefined" && metaName.trim() !== "") {
+            candidateName = metaName;
+          }
+        }
       } catch (error) {
         console.error("Error fetching candidate name:", error);
-        candidateName = "ứng viên";
+        const metaName = metadata.candidateName;
+        if (metaName && metaName !== "undefined" && metaName.trim() !== "") {
+          candidateName = metaName;
+        }
       }
     }
 
-    if (plan.RoleID === 3 && candidateName) {
+    if (plan.RoleID === 3 && candidateId && candidateName) {
       message = `Bạn đã trả ${money} để sử dụng tính năng "${plan.PlanName}" nhằm xem liên hệ của ứng viên "${candidateName}".`;
+    } else if (plan.RoleID === 3 && candidateId) {
+      message = `Bạn đã trả ${money} để sử dụng tính năng "${plan.PlanName}" nhằm xem liên hệ ứng viên.`;
     } else {
       message = `Bạn đã trả ${money} để sử dụng tính năng "${plan.PlanName}".`;
     }
     linkUrl =
       plan.RoleID === 3 ? "/employer/applicants" : "/candidate/applied-jobs";
-    referenceId = plan.PlanID?.toString();
+    referenceId = candidateId || plan.PlanID?.toString();
   } else {
     message = `Chúc mừng! Bạn đã mua thành công gói "${
       plan.SnapshotPlanName || plan.PlanName
-    }" với giá ${money} để xem số điện thoại của ứng viên ${
-      metadata.candidateName
-    }.`;
+    }" với giá ${money}.`;
     linkUrl =
       plan.RoleID === 3 ? "/employer/subscription" : "/candidate/subscription";
     referenceId = plan.PlanID?.toString();
@@ -205,17 +214,26 @@ export const createCandidateAppliedNotification = async (
 
 export const createApplicationSubmittedNotification = async (
   candidateUserId,
-  application,
   job
 ) => {
-  const message = `Bạn đã ứng tuyển thành công vào vị trí "${job.JobTitle}".`;
-  const linkUrl = `/candidate/applied-jobs`;
+  const jobTitle = job?.JobTitle || "công việc";
+  const jobId = job?.JobID;
+
+  if (!jobId) {
+    console.error("createApplicationSubmittedNotification: Missing jobId", {
+      job,
+    });
+    return;
+  }
+
+  const message = `Bạn đã ứng tuyển thành công vào vị trí "${jobTitle}".`;
+  const linkUrl = `/jobs/${jobId}`;
 
   await createNotification({
     userId: candidateUserId,
     message,
     type: NOTIFICATION_TYPES.APPLICATION_SUBMITTED,
     linkUrl,
-    referenceId: application.ApplicationID?.toString(),
+    referenceId: jobId.toString(),
   });
 };
