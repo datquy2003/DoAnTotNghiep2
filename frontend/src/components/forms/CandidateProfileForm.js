@@ -28,6 +28,8 @@ const CandidateProfileForm = () => {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
+  const today = new Date().toISOString().split("T")[0];
+
   useEffect(() => {
     const initData = async () => {
       setInitialLoading(true);
@@ -113,6 +115,16 @@ const CandidateProfileForm = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+
+    if (name === "PhoneNumber") {
+      const numericValue = value.replace(/[^0-9]/g, "");
+      setFormData((prev) => ({
+        ...prev,
+        [name]: numericValue,
+      }));
+      return;
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -145,19 +157,19 @@ const CandidateProfileForm = () => {
   if (initialLoading)
     return (
       <div className="flex justify-center p-8">
-        <FiLoader className="w-8 h-8 text-blue-600 animate-spin" />
+        <FiLoader className="animate-spin text-blue-600 h-8 w-8" />
       </div>
     );
 
   return (
-    <div className="p-6 bg-white rounded-lg shadow-md">
-      <h2 className="mb-6 text-xl font-semibold text-gray-800">
+    <div className="bg-white p-6 rounded-lg shadow-md">
+      <h2 className="text-xl font-semibold mb-6 text-gray-800">
         Hồ sơ Ứng viên
       </h2>
       <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Họ và tên
             </label>
             <input
@@ -165,11 +177,11 @@ const CandidateProfileForm = () => {
               type="text"
               value={formData.FullName}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
           <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Số điện thoại
             </label>
             <input
@@ -177,14 +189,14 @@ const CandidateProfileForm = () => {
               type="tel"
               value={formData.PhoneNumber}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Ngày sinh
             </label>
             <input
@@ -192,11 +204,12 @@ const CandidateProfileForm = () => {
               type="date"
               value={formData.Birthday}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+              max={today}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
           <div>
-            <label className="block mb-1 text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
               Địa chỉ
             </label>
             <input
@@ -204,7 +217,7 @@ const CandidateProfileForm = () => {
               type="text"
               value={formData.Address}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>
         </div>
@@ -216,7 +229,7 @@ const CandidateProfileForm = () => {
         />
 
         <div className="relative" ref={dropdownRef}>
-          <label className="block mb-2 text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Chuyên môn (Tối đa 5)
           </label>
 
@@ -257,8 +270,8 @@ const CandidateProfileForm = () => {
           </div>
 
           {isDropdownOpen && (
-            <div className="absolute z-20 flex w-full mt-1 overflow-hidden bg-white border border-gray-200 rounded-lg shadow-xl h-72">
-              <div className="w-1/3 overflow-y-auto border-r border-gray-200 bg-gray-50">
+            <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-xl flex h-72 overflow-hidden">
+              <div className="w-1/3 border-r border-gray-200 overflow-y-auto bg-gray-50">
                 {categories.map((cat) => (
                   <div
                     key={cat.CategoryID}
@@ -274,7 +287,7 @@ const CandidateProfileForm = () => {
                 ))}
               </div>
 
-              <div className="w-2/3 p-2 overflow-y-auto bg-white">
+              <div className="w-2/3 overflow-y-auto bg-white p-2">
                 {activeCategoryId ? (
                   specsCache[activeCategoryId] ? (
                     specsCache[activeCategoryId].length > 0 ? (
@@ -286,7 +299,7 @@ const CandidateProfileForm = () => {
                           return (
                             <label
                               key={spec.SpecializationID}
-                              className="flex items-center px-3 py-2 rounded cursor-pointer select-none hover:bg-gray-50"
+                              className="flex items-center px-3 py-2 hover:bg-gray-50 rounded cursor-pointer select-none"
                             >
                               <input
                                 type="checkbox"
@@ -308,17 +321,17 @@ const CandidateProfileForm = () => {
                         })}
                       </div>
                     ) : (
-                      <div className="mt-10 text-sm text-center text-gray-400">
+                      <div className="text-center text-gray-400 mt-10 text-sm">
                         Danh mục này chưa có chuyên môn.
                       </div>
                     )
                   ) : (
-                    <div className="flex items-center justify-center h-full text-blue-500">
+                    <div className="flex justify-center items-center h-full text-blue-500">
                       <FiLoader className="animate-spin" />
                     </div>
                   )
                 ) : (
-                  <div className="mt-20 text-sm text-center text-gray-400">
+                  <div className="text-center text-gray-400 mt-20 text-sm">
                     Di chuột vào danh mục bên trái để xem chuyên môn.
                   </div>
                 )}
@@ -328,7 +341,7 @@ const CandidateProfileForm = () => {
         </div>
 
         <div>
-          <label className="block mb-1 text-sm font-medium text-gray-700">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Giới thiệu bản thân
           </label>
           <textarea
@@ -336,7 +349,7 @@ const CandidateProfileForm = () => {
             rows="5"
             value={formData.ProfileSummary}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
           ></textarea>
         </div>
 
@@ -346,9 +359,9 @@ const CandidateProfileForm = () => {
             type="checkbox"
             checked={formData.IsSearchable}
             onChange={handleChange}
-            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
           />
-          <label className="block ml-2 text-sm text-gray-900">
+          <label className="ml-2 block text-sm text-gray-900">
             Cho phép nhà tuyển dụng tìm kiếm hồ sơ
           </label>
         </div>

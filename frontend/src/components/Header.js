@@ -45,6 +45,7 @@ const HeaderNavLink = ({ to, children }) => {
 };
 
 const NotificationBell = () => {
+  const { appUser } = useAuth();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -258,18 +259,55 @@ const NotificationBell = () => {
         return "/candidate/applied-jobs";
 
       case "VIP_PURCHASE":
+        const msg = (item.Message || "").toLowerCase();
+        const isOneTime =
+          msg.includes("tính năng") ||
+          msg.includes("trả") ||
+          item.LinkURL?.includes("/applicants") ||
+          item.LinkURL?.includes("/jobs/") ||
+          item.LinkURL?.includes("/cvs") ||
+          (item.ReferenceID && !isNaN(Number(item.ReferenceID)));
+
+        console.log("VIP_PURCHASE check:", {
+          message: msg,
+          linkURL: item.LinkURL,
+          referenceID: item.ReferenceID,
+          isOneTime,
+          userRole: appUser?.RoleID,
+        });
+
+        if (isOneTime) {
+          if (appUser?.RoleID === 3) {
+            return "/employer/applicants";
+          }
+          if (appUser?.RoleID === 4) {
+            if (item.ReferenceID && !isNaN(Number(item.ReferenceID))) {
+              const jobId = Number(item.ReferenceID);
+              return `/jobs/${jobId}`;
+            }
+            if (item.LinkURL && item.LinkURL.includes("/jobs/")) {
+              return item.LinkURL;
+            }
+            return "/candidate/applied-jobs";
+          }
+        }
         return item.LinkURL || "/employer/subscription";
 
       case "VIP_EXPIRY":
         return item.LinkURL || "/employer/subscription";
 
       case "VIP_ONE_TIME_PURCHASE":
-        const msg = (item.Message || "").toLowerCase();
-        if (msg.includes("liên hệ ứng viên") || msg.includes("ứng viên")) {
+        if (appUser?.RoleID === 3) {
           return "/employer/applicants";
         }
-        if (msg.includes("đẩy top") || msg.includes("cv")) {
-          return "/candidate/cvs";
+        if (appUser?.RoleID === 4) {
+          if (item.ReferenceID && !isNaN(Number(item.ReferenceID))) {
+            return `/jobs/${item.ReferenceID}`;
+          }
+          if (item.LinkURL && item.LinkURL.includes("/jobs/")) {
+            return item.LinkURL;
+          }
+          return "/candidate/applied-jobs";
         }
         return "/employer/applicants";
 
@@ -279,7 +317,14 @@ const NotificationBell = () => {
   };
 
   const handleNavigate = (item) => {
+    console.log("Navigating from notification:", {
+      Type: item.Type,
+      LinkURL: item.LinkURL,
+      ReferenceID: item.ReferenceID,
+      UserRole: appUser?.RoleID,
+    });
     const target = resolveLink(item);
+    console.log("Resolved target:", target);
     if (target) {
       navigate(target);
       setOpen(false);

@@ -58,19 +58,70 @@ export const createVipPurchaseNotification = async (
   metadata = {}
 ) => {
   const money = formatCurrencyVN(plan.SnapshotPrice || plan.Price) + "₫";
-  let message = `Chúc mừng! Bạn đã mua thành công gói "${
-    plan.SnapshotPlanName || plan.PlanName
-  }" với giá ${money}.`;
 
-  const linkUrl =
-    plan.RoleID === 3 ? "/employer/subscription" : "/candidate/subscription";
+  const isOneTime = plan.PlanType === "ONE_TIME" || !plan.DurationInDays;
+  const jobId = metadata.jobId;
+
+  let message;
+  let linkUrl;
+  let referenceId;
+
+  if (isOneTime && jobId) {
+    const jobTitle = metadata.jobTitle || "công việc";
+    message = `Bạn đã trả ${money} để sử dụng tính năng "${plan.PlanName}" xem danh sách ứng viên đã ứng tuyển vào công việc "${jobTitle}".`;
+    linkUrl = `/jobs/${jobId}`;
+    referenceId = jobId.toString();
+  } else if (isOneTime) {
+    const candidateId = metadata.candidateId;
+    let candidateName = metadata.candidateName || null;
+
+    if (candidateId && !candidateName && plan.RoleID === 3) {
+      try {
+        const pool = await sql.connect(sqlConfig);
+        const candidateRes = await pool
+          .request()
+          .input("CandidateID", sql.NVarChar, candidateId).query(`
+            SELECT TOP 1
+              u.DisplayName,
+              cp.FullName
+            FROM Users u
+            LEFT JOIN CandidateProfiles cp ON u.FirebaseUserID = cp.UserID
+            WHERE u.FirebaseUserID = @CandidateID
+          `);
+        const candidate = candidateRes.recordset?.[0];
+        candidateName =
+          candidate?.FullName || candidate?.DisplayName || "ứng viên";
+      } catch (error) {
+        console.error("Error fetching candidate name:", error);
+        candidateName = "ứng viên";
+      }
+    }
+
+    if (plan.RoleID === 3 && candidateName) {
+      message = `Bạn đã trả ${money} để sử dụng tính năng "${plan.PlanName}" nhằm xem liên hệ của ứng viên "${candidateName}".`;
+    } else {
+      message = `Bạn đã trả ${money} để sử dụng tính năng "${plan.PlanName}".`;
+    }
+    linkUrl =
+      plan.RoleID === 3 ? "/employer/applicants" : "/candidate/applied-jobs";
+    referenceId = plan.PlanID?.toString();
+  } else {
+    message = `Chúc mừng! Bạn đã mua thành công gói "${
+      plan.SnapshotPlanName || plan.PlanName
+    }" với giá ${money} để xem số điện thoại của ứng viên ${
+      metadata.candidateName
+    }.`;
+    linkUrl =
+      plan.RoleID === 3 ? "/employer/subscription" : "/candidate/subscription";
+    referenceId = plan.PlanID?.toString();
+  }
 
   await createNotification({
     userId,
     message,
     type: NOTIFICATION_TYPES.VIP_PURCHASE,
     linkUrl,
-    referenceId: plan.PlanID?.toString(),
+    referenceId,
   });
 };
 
