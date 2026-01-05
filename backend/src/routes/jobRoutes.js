@@ -644,9 +644,16 @@ router.post("/:id/apply", checkAuth, async (req, res) => {
         .request()
         .input("UserID", sql.NVarChar, candidateId)
         .query(
-          "SELECT TOP 1 CVID FROM CVs WHERE UserID = @UserID AND IsDefault = 1 ORDER BY CVID DESC"
+          "SELECT TOP 1 CVID, IsLocked FROM CVs WHERE UserID = @UserID AND IsDefault = 1 AND IsLocked = 0 ORDER BY CVID DESC"
         );
-      finalCvId = defCvRes.recordset?.[0]?.CVID || null;
+      const defCv = defCvRes.recordset?.[0];
+      if (defCv && defCv.IsLocked) {
+        return res.status(400).json({
+          message:
+            "CV mặc định của bạn đang bị khóa do vượt quá giới hạn lưu trữ. Vui lòng xóa bớt CV hoặc nâng cấp gói để sử dụng.",
+        });
+      }
+      finalCvId = defCv?.CVID || null;
     }
 
     if (!finalCvId) {
@@ -661,7 +668,7 @@ router.post("/:id/apply", checkAuth, async (req, res) => {
       .input("CVID", sql.Int, finalCvId)
       .input("UserID", sql.NVarChar, candidateId)
       .query(
-        "SELECT TOP 1 CVID, CVFileUrl, CVName FROM CVs WHERE CVID = @CVID AND UserID = @UserID"
+        "SELECT TOP 1 CVID, CVFileUrl, CVName, IsLocked FROM CVs WHERE CVID = @CVID AND UserID = @UserID"
       );
     if (!cvRes.recordset?.[0]) {
       return res
@@ -670,6 +677,13 @@ router.post("/:id/apply", checkAuth, async (req, res) => {
     }
 
     const cvData = cvRes.recordset[0];
+    if (cvData.IsLocked) {
+      return res.status(400).json({
+        message:
+          "CV này đang bị khóa do vượt quá giới hạn lưu trữ. Vui lòng xóa bớt CV hoặc nâng cấp gói để sử dụng.",
+      });
+    }
+
     const snapshotCvFileUrl = cvData.CVFileUrl || null;
     const snapshotCvName = cvData.CVName || null;
 

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { FiX, FiFile, FiStar, FiCheckCircle } from "react-icons/fi";
 import { cvApi } from "../../api/cvApi";
 import toast from "react-hot-toast";
+import { formatDateOnly } from "../../utils/formatDateOnly";
 
 const CvSelectionModal = ({ isOpen, onClose, onSelect, jobTitle }) => {
   const [cvs, setCvs] = useState([]);
@@ -21,12 +22,13 @@ const CvSelectionModal = ({ isOpen, onClose, onSelect, jobTitle }) => {
     try {
       const res = await cvApi.listMyCvs();
       const cvList = res?.data?.cvs || [];
-      setCvs(cvList);
-      const defaultCv = cvList.find((cv) => cv.IsDefault);
+      const unlockedCvs = cvList.filter((cv) => !cv.IsLocked);
+      setCvs(unlockedCvs);
+      const defaultCv = unlockedCvs.find((cv) => cv.IsDefault);
       if (defaultCv) {
         setSelectedCvId(defaultCv.CVID);
-      } else if (cvList.length > 0) {
-        setSelectedCvId(cvList[0].CVID);
+      } else if (unlockedCvs.length > 0) {
+        setSelectedCvId(unlockedCvs[0].CVID);
       }
     } catch (err) {
       console.error("Lỗi tải danh sách CV:", err);
@@ -112,8 +114,7 @@ const CvSelectionModal = ({ isOpen, onClose, onSelect, jobTitle }) => {
                         </div>
                         {cv.CreatedAt && (
                           <p className="text-xs text-gray-500">
-                            Tải lên:{" "}
-                            {new Date(cv.CreatedAt).toLocaleDateString("vi-VN")}
+                            Tải lên: {formatDateOnly(cv.CreatedAt)}
                           </p>
                         )}
                       </div>
