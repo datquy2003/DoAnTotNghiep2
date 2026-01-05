@@ -210,15 +210,53 @@ router.get("/:id/inline", checkAuth, async (req, res) => {
   }
 });
 
-router.post("/", checkAuth, uploadCV.single("cvFile"), async (req, res) => {
-  const userId = req.firebaseUser.uid;
+const handleMulterUpload = (req, res, next) => {
+  uploadCV.single("cvFile")(req, res, (err) => {
+    if (err) {
+      console.error("❌ Multer Error:", err);
+      console.error("Error name:", err.name);
+      console.error("Error message:", err.message);
+      console.error("Error code:", err.code);
+      console.error("Error field:", err.field);
+
+      if (err.name === "MulterError") {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({
+            message: "File quá lớn. Kích thước tối đa là 10MB.",
+          });
+        }
+        if (err.code === "LIMIT_UNEXPECTED_FILE") {
+          return res.status(400).json({
+            message: "Tên field không đúng. Vui lòng sử dụng 'cvFile'.",
+          });
+        }
+        return res.status(400).json({
+          message: `Lỗi upload file: ${err.message}`,
+        });
+      }
+
+      return res.status(500).json({
+        message: `Lỗi khi upload file: ${err.message || "Unknown error"}`,
+      });
+    }
+    next();
+  });
+};
+
+router.post("/", checkAuth, handleMulterUpload, async (req, res) => {
+  const userId = req.firebaseUser?.uid;
 
   if (!req.file) {
+    console.error("❌ Lỗi: Không có file được upload");
     return res.status(400).json({ message: "Vui lòng tải lên tệp CV." });
   }
 
   const cvUrl = req.file?.secure_url || req.file?.path || req.file?.url;
+
   if (!cvUrl) {
+    console.error("❌ Lỗi: Không thể lấy URL từ file object");
+    console.error("File object keys:", Object.keys(req.file));
+    console.error("File object:", JSON.stringify(req.file, null, 2));
     return res
       .status(500)
       .json({ message: "Không thể lấy URL tệp CV từ Cloudinary." });
@@ -236,9 +274,7 @@ router.post("/", checkAuth, uploadCV.single("cvFile"), async (req, res) => {
   try {
     const pool = await sql.connect(sqlConfig);
     await ensureCandidateRole(pool, userId);
-
     const limit = await getEffectiveCvLimit(pool, userId);
-
     const unlockedCountResult = await pool
       .request()
       .input("UserID", sql.NVarChar, userId)
@@ -248,6 +284,7 @@ router.post("/", checkAuth, uploadCV.single("cvFile"), async (req, res) => {
     const unlockedCount = unlockedCountResult.recordset[0]?.Cnt || 0;
 
     if (limit && unlockedCount >= limit) {
+      console.warn("⚠️ Đã đạt giới hạn CV");
       return res.status(400).json({
         message: `Bạn chỉ được lưu tối đa ${limit} CV. Vui lòng xóa bớt hoặc nâng cấp gói.`,
       });
@@ -255,7 +292,6 @@ router.post("/", checkAuth, uploadCV.single("cvFile"), async (req, res) => {
 
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
-
     try {
       const insertResult = await transaction
         .request()
@@ -268,6 +304,10 @@ router.post("/", checkAuth, uploadCV.single("cvFile"), async (req, res) => {
         `);
 
       const newCvId = insertResult.recordset[0]?.CVID;
+
+      if (!newCvId) {
+        throw new Error("Không thể lấy CVID sau khi insert");
+      }
 
       const defaultCountResult = await transaction
         .request()
@@ -292,7 +332,20 @@ router.post("/", checkAuth, uploadCV.single("cvFile"), async (req, res) => {
       await enforceCandidateCvLimit(transaction, userId, limit);
       await transaction.commit();
     } catch (transError) {
+      console.error("❌ Lỗi trong transaction:", transError);
+      console.error("Error name:", transError.name);
+      console.error("Error message:", transError.message);
+      console.error("Error stack:", transError.stack);
+      if (transError instanceof sql.RequestError) {
+        console.error("SQL Error number:", transError.number);
+        console.error("SQL Error state:", transError.state);
+        console.error("SQL Error class:", transError.class);
+        console.error("SQL Error serverName:", transError.serverName);
+        console.error("SQL Error procName:", transError.procName);
+        console.error("SQL Error lineNumber:", transError.lineNumber);
+      }
       await transaction.rollback();
+      console.error("✅ Transaction đã rollback");
       throw transError;
     }
 
@@ -304,15 +357,40 @@ router.post("/", checkAuth, uploadCV.single("cvFile"), async (req, res) => {
       .status(201)
       .json({ message: "Tải lên CV thành công.", cvs, quota, defaultCvId });
   } catch (error) {
-    console.error("Lỗi POST /cvs:", error);
+    console.error("=== POST /cvs - LỖI TỔNG QUÁT ===");
+    console.error("Error type:", error.constructor.name);
+    console.error("Error name:", error.name);
+    console.error("Error message:", error.message);
+    console.error("Error code:", error.code);
+    console.error("Error stack:", error.stack);
+
+    if (error instanceof sql.RequestError) {
+      console.error("SQL RequestError details:");
+      console.error("  - Number:", error.number);
+      console.error("  - State:", error.state);
+      console.error("  - Class:", error.class);
+      console.error("  - Server:", error.serverName);
+      console.error("  - Procedure:", error.procName);
+      console.error("  - Line:", error.lineNumber);
+    }
+
     if (error.code === "ROLE_FORBIDDEN") {
       return res
         .status(403)
         .json({ message: "Chỉ ứng viên mới được quản lý CV." });
     }
-    return res
-      .status(500)
-      .json({ message: "Lỗi server khi tải lên hoặc lưu CV." });
+
+    return res.status(500).json({
+      message: "Lỗi server khi tải lên hoặc lưu CV.",
+      error:
+        process.env.NODE_ENV === "development"
+          ? {
+              name: error.name,
+              message: error.message,
+              code: error.code,
+            }
+          : undefined,
+    });
   }
 });
 
