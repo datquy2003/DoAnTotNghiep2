@@ -928,6 +928,39 @@ router.delete("/users/:uid", checkAuth, async (req, res) => {
         });
       }
 
+      const companyRes = await transaction
+        .request()
+        .input("OwnerUserID", sql.NVarChar, uid)
+        .query(
+          "SELECT CompanyID FROM Companies WHERE OwnerUserID = @OwnerUserID"
+        );
+
+      if (companyRes.recordset.length > 0) {
+        const companyId = companyRes.recordset[0].CompanyID;
+
+        await transaction
+          .request()
+          .input("CompanyID", sql.Int, companyId)
+          .query("DELETE FROM JobPostDailyLogs WHERE CompanyID = @CompanyID");
+
+        await transaction
+          .request()
+          .input("CompanyID", sql.Int, companyId)
+          .query("DELETE FROM BlockedCompanies WHERE CompanyID = @CompanyID");
+      }
+
+      await transaction
+        .request()
+        .input("PushedByUserID", sql.NVarChar, uid)
+        .query(
+          "DELETE FROM JobPushTopLogs WHERE PushedByUserID = @PushedByUserID"
+        );
+
+      await transaction
+        .request()
+        .input("CandidateID", sql.NVarChar, uid)
+        .query("DELETE FROM Applications WHERE CandidateID = @CandidateID");
+
       await transaction
         .request()
         .input("UserID", sql.NVarChar, uid)
