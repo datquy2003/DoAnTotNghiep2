@@ -26,7 +26,7 @@ const storageCV = new CloudinaryStorage({
 
       const params = {
         folder: "job_app_cvs",
-        resource_type: isPdf ? "raw" : "auto",
+        resource_type: "image",
         allowed_formats: ["pdf", "doc", "docx"],
         public_id: publicId,
       };
