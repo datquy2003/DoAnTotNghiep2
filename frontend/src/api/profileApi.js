@@ -49,6 +49,14 @@ const createOneTimeCheckout = (featureKey, candidateId) => {
   });
 };
 
+const logProfileView = (candidateId) => {
+  return apiClient.post("/candidates/log-profile-view", { candidateId });
+};
+
+const getProfileViews = () => {
+  return apiClient.get("/candidates/me/profile-views");
+};
+
 export const profileApi = {
   updateBaseProfile,
   getCandidateProfile,
@@ -61,4 +69,6 @@ export const profileApi = {
   revealCandidateContact,
   createOneTimeCheckout,
   pushTopCandidate,
+  logProfileView,
+  getProfileViews,
 };

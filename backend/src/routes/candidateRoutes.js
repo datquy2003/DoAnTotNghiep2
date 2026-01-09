@@ -529,4 +529,116 @@ router.post("/me/push-top", checkAuth, async (req, res) => {
   }
 });
 
+router.post("/log-profile-view", checkAuth, async (req, res) => {
+  const firebaseUid = req.firebaseUser.uid;
+  const { candidateId } = req.body;
+
+  if (!candidateId) {
+    return res.status(400).json({ message: "Thiếu candidateId." });
+  }
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+
+    await ensureEmployerRole(pool, firebaseUid);
+
+    const companyResult = await pool
+      .request()
+      .input("OwnerUserID", sql.NVarChar, firebaseUid)
+      .query(
+        "SELECT CompanyName FROM Companies WHERE OwnerUserID = @OwnerUserID"
+      );
+
+    if (companyResult.recordset.length === 0) {
+      return res
+        .status(404)
+        .json({ message: "Không tìm thấy thông tin công ty." });
+    }
+
+    const companyName = companyResult.recordset[0].CompanyName;
+
+    const candidateResult = await pool
+      .request()
+      .input("CandidateID", sql.NVarChar, candidateId).query(`
+        SELECT cp.UserID, cp.IsSearchable
+        FROM CandidateProfiles cp
+        WHERE cp.UserID = @CandidateID AND cp.IsSearchable = 1
+      `);
+
+    if (candidateResult.recordset.length === 0) {
+      return res.status(404).json({
+        message: "Không tìm thấy ứng viên hoặc ứng viên không bật tìm kiếm.",
+      });
+    }
+
+    await pool
+      .request()
+      .input("CandidateID", sql.NVarChar, candidateId)
+      .input("EmployerID", sql.NVarChar, firebaseUid)
+      .input("CompanyName", sql.NVarChar, companyName).query(`
+        MERGE ProfileViews AS target
+        USING (SELECT @CandidateID AS CandidateID, @EmployerID AS EmployerID, @CompanyName AS CompanyName) AS source
+        ON target.CandidateID = source.CandidateID AND target.EmployerID = source.EmployerID
+        WHEN MATCHED THEN
+          UPDATE SET ViewedAt = GETDATE(), CompanyName = source.CompanyName
+        WHEN NOT MATCHED THEN
+          INSERT (CandidateID, EmployerID, CompanyName, ViewedAt)
+          VALUES (source.CandidateID, source.EmployerID, source.CompanyName, GETDATE());
+      `);
+
+    return res
+      .status(200)
+      .json({ message: "Đã ghi nhận việc xem thông tin ứng viên." });
+  } catch (error) {
+    console.error("Lỗi log profile view:", error);
+    const status = error.status || 500;
+    return res.status(status).json({
+      message:
+        status === 403
+          ? "Bạn không có quyền thực hiện thao tác này."
+          : "Lỗi server khi ghi nhận việc xem thông tin ứng viên.",
+    });
+  }
+});
+
+router.get("/me/profile-views", checkAuth, async (req, res) => {
+  const firebaseUid = req.firebaseUser.uid;
+
+  try {
+    const pool = await sql.connect(sqlConfig);
+
+    const result = await pool
+      .request()
+      .input("CandidateID", sql.NVarChar, firebaseUid).query(`
+        SELECT
+          pv.ViewID,
+          pv.CompanyName,
+          pv.ViewedAt,
+          c.CompanyID,
+          c.LogoURL,
+          c.CompanyName as ActualCompanyName
+        FROM ProfileViews pv
+        INNER JOIN Users u ON pv.EmployerID = u.FirebaseUserID
+        INNER JOIN Companies c ON u.FirebaseUserID = c.OwnerUserID
+        WHERE pv.CandidateID = @CandidateID
+        ORDER BY pv.ViewedAt DESC
+      `);
+
+    const profileViews = result.recordset.map((row) => ({
+      viewId: row.ViewID,
+      companyName: row.ActualCompanyName || row.CompanyName,
+      viewedAt: row.ViewedAt,
+      companyId: row.CompanyID,
+      logoUrl: row.LogoURL,
+    }));
+
+    return res.status(200).json({ profileViews });
+  } catch (error) {
+    console.error("Lỗi lấy profile views:", error);
+    return res.status(500).json({
+      message: "Lỗi server khi lấy danh sách công ty đã xem thông tin.",
+    });
+  }
+});
+
 export default router;

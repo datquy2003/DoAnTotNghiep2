@@ -102,7 +102,6 @@ CREATE TABLE Companies (
     Country nvarchar(100),
     Latitude decimal(9, 6),
     Longitude decimal(9, 6),
-	PushTopCount int DEFAULT 0,
     
     CONSTRAINT FK_Companies_Users FOREIGN KEY (OwnerUserID) REFERENCES Users(FirebaseUserID) ON DELETE CASCADE
 );
@@ -307,16 +306,30 @@ CREATE TABLE CVViews (
     ViewID int IDENTITY(1,1) PRIMARY KEY,
     ApplicationID int,
     CandidateID nvarchar(128) NOT NULL,
-    EmployerID nvarchar(128) NOT NULL, 
+    EmployerID nvarchar(128) NOT NULL,
     ViewedAt datetime DEFAULT GETDATE(),
-    
+
     CONSTRAINT FK_CVViews_Applications FOREIGN KEY (ApplicationID) REFERENCES Applications(ApplicationID) ON DELETE CASCADE,
     CONSTRAINT FK_CVViews_Candidate FOREIGN KEY (CandidateID) REFERENCES Users(FirebaseUserID),
     CONSTRAINT FK_CVViews_Employer FOREIGN KEY (EmployerID) REFERENCES Users(FirebaseUserID)
 );
 GO
 
--- Bảng 19: VipOneTimeUsage (Lưu lượt dùng tính năng VIP một lần)
+-- Bảng 19: ProfileViews (Log NTD xem thông tin ứng viên)
+CREATE TABLE ProfileViews (
+    ViewID int IDENTITY(1,1) PRIMARY KEY,
+    CandidateID nvarchar(128) NOT NULL,
+    EmployerID nvarchar(128) NOT NULL,
+    CompanyName nvarchar(255) NOT NULL,
+    ViewedAt datetime DEFAULT GETDATE(),
+
+    CONSTRAINT FK_ProfileViews_Candidate FOREIGN KEY (CandidateID) REFERENCES Users(FirebaseUserID) ON DELETE CASCADE,
+    CONSTRAINT FK_ProfileViews_Employer FOREIGN KEY (EmployerID) REFERENCES Users(FirebaseUserID) ON DELETE NO ACTION,
+    CONSTRAINT UQ_ProfileViews_Candidate_Employer UNIQUE (CandidateID, EmployerID)
+);
+GO
+
+-- Bảng 20: VipOneTimeUsage (Lưu lượt dùng tính năng VIP một lần)
 CREATE TABLE VipOneTimeUsage (
     UsageID int IDENTITY(1,1) PRIMARY KEY,
     UserID nvarchar(128) NOT NULL,
@@ -332,7 +345,7 @@ CREATE TABLE VipOneTimeUsage (
 );
 GO
 
--- Bảng 20: JobPushTopLogs (Log mỗi lần nhà tuyển dụng bấm đẩy top bài tuyển dụng)
+-- Bảng 21: JobPushTopLogs (Log mỗi lần nhà tuyển dụng bấm đẩy top bài tuyển dụng)
 CREATE TABLE JobPushTopLogs (
     LogID int IDENTITY(1,1) PRIMARY KEY,
     CompanyID int NOT NULL,
@@ -349,7 +362,7 @@ GO
 CREATE INDEX IX_JobPushTopLogs_Company_PushedAt ON JobPushTopLogs (CompanyID, PushedAt DESC);
 GO
 
--- Bảng 21: JobWorkingShifts (Chọn nhiều ca làm việc trong bài tuyển dụng)
+-- Bảng 22: JobWorkingShifts (Chọn nhiều ca làm việc trong bài tuyển dụng)
 CREATE TABLE JobWorkingShifts (
     ShiftID INT IDENTITY(1,1) PRIMARY KEY,
     JobID INT NOT NULL,
@@ -372,7 +385,7 @@ CREATE TABLE JobWorkingShifts (
 );
 GO
 
--- Bảng 22: JobPostDailyLogs (Log để tracking số bài đăng trong ngày của nhà tuyển dụng)
+-- Bảng 23: JobPostDailyLogs (Log để tracking số bài đăng trong ngày của nhà tuyển dụng)
 CREATE TABLE JobPostDailyLogs (
     LogID INT IDENTITY(1,1) PRIMARY KEY,
     CompanyID INT NOT NULL,

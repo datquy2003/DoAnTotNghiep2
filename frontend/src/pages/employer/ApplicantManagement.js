@@ -52,6 +52,8 @@ const ApplicantManagement = () => {
   const [selectedPlanId, setSelectedPlanId] = useState(null);
   const [page, setPage] = useState(1);
   const candidatesPerPage = 10;
+  // eslint-disable-next-line no-unused-vars
+  const [loggingView, setLoggingView] = useState(false);
 
   const filteredSpecs = useMemo(() => {
     if (!specSearch.trim()) return specializations;
@@ -540,6 +542,25 @@ const ApplicantManagement = () => {
   useEffect(() => {
     setPage(1);
   }, [filters]);
+
+  useEffect(() => {
+    const logView = async (candidate) => {
+      if (!candidate?.candidateId) return;
+
+      setLoggingView(true);
+      try {
+        await profileApi.logProfileView(candidate.candidateId);
+      } catch (error) {
+        console.error("Lỗi ghi nhận việc xem thông tin ứng viên:", error);
+      } finally {
+        setLoggingView(false);
+      }
+    };
+
+    if (detailCandidate) {
+      logView(detailCandidate);
+    }
+  }, [detailCandidate]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
